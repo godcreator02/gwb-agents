@@ -1,6 +1,6 @@
 import path from 'node:path'
 
-/** 三条命令的参数校验：认不出的键直接报错，不静默忽略 */
+/** 各命令的参数校验：认不出的键直接报错，不静默忽略 */
 
 /** MCP 客户端等一次调用有上限（Claude Code 是 300 秒没动静就放弃），zcode.status 的等待留出余量 */
 export const MAX_WAIT_SECONDS = 240
@@ -62,6 +62,15 @@ export function parseSendArgs(raw: unknown): SendArgs {
     workspace: workspacePath(commandName, obj['workspace']),
     task: requireNonEmptyString(commandName, 'task', obj['task'], TASK_MEANING),
     prompt: requireNonEmptyString(commandName, 'prompt', obj['prompt'], '发给 ZCode 的指令'),
+  }
+}
+
+export function parseArchiveArgs(raw: unknown): { workspace: string; task: string } {
+  const commandName = 'zcode.archive'
+  const obj = objectArgs(commandName, raw, ['workspace', 'task'])
+  return {
+    workspace: workspacePath(commandName, obj['workspace']),
+    task: requireNonEmptyString(commandName, 'task', obj['task'], TASK_MEANING),
   }
 }
 

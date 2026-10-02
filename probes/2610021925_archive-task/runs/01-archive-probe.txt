@@ -1,0 +1,5 @@
+# node archive-probe.mjs sess_d9afb1fd-24b7-4851-9bf0-81c7aa003cb5 D:\unitfolders\00000-console\console
+archiveTask returned {"keys":["taskId","traceId","title","titleOverridden","workspacePath","createdAt","updatedAt","mode","model","thoughtLevel","provider","target"],"title":"New session"}
+# 返回的任务信息里没有 archived；侧栏索引 ~/.zcode/v2/tasks-index.sqlite 里这条：
+{"task_id":"sess_d9afb1fd-24b7-4851-9bf0-81c7aa003cb5","title":"New session","task_status":null,"archived":1,"deleted":0}
+9229 已关闭

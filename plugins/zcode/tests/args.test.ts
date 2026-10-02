@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { MAX_WAIT_SECONDS, parseCreateArgs, parseSendArgs, parseStatusArgs } from '../src/args.js'
+import { MAX_WAIT_SECONDS, parseArchiveArgs, parseCreateArgs, parseSendArgs, parseStatusArgs } from '../src/args.js'
 
 describe('parseCreateArgs', () => {
   it('只收 workspace 与 prompt', () => {
@@ -20,6 +20,14 @@ describe('parseSendArgs', () => {
   it('要 task', () => {
     expect(parseSendArgs({ workspace: 'D:\\repo', task: 'sess_1', prompt: '接着干' })).toEqual({ workspace: 'D:\\repo', task: 'sess_1', prompt: '接着干' })
     expect(() => parseSendArgs({ workspace: 'D:\\repo', prompt: '接着干' })).toThrow('缺 task')
+  })
+})
+
+describe('parseArchiveArgs', () => {
+  it('只收 workspace 与 task', () => {
+    expect(parseArchiveArgs({ workspace: 'D:\\repo', task: 'sess_1' })).toEqual({ workspace: 'D:\\repo', task: 'sess_1' })
+    expect(() => parseArchiveArgs({ workspace: 'D:\\repo' })).toThrow('缺 task')
+    expect(() => parseArchiveArgs({ workspace: 'D:\\repo', task: 'sess_1', prompt: 'x' })).toThrow('不认识参数 prompt')
   })
 })
 

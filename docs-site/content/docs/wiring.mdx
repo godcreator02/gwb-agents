@@ -11,7 +11,7 @@ description: gwb-zcode 提供的命令与说明书，注入的服务与 peer 写
 
 | 类别 | 名字 | 说明 |
 | --- | --- | --- |
-| 命令 | `zcode.create` / `zcode.send` / `zcode.status` | 给 ZCode 桌面端派任务、读结果，形状见[命令](/docs/commands) |
+| 命令 | `zcode.create` / `zcode.send` / `zcode.status` / `zcode.archive` | 给 ZCode 桌面端派任务、读结果、归档会话，形状见[命令](/docs/commands) |
 | 说明书 | `zcode` | 包根 `skills/zcode/`，经 `gwbSkills.register` 登记 |
 
 不提供服务、不注册窗格、不声明设置项。
@@ -25,7 +25,7 @@ description: gwb-zcode 提供的命令与说明书，注入的服务与 peer 写
 
 内核包 `@godcreator/gwb-kernel-desktop`（`^0.10.1`）只提供接口类型。
 
-{/* ref file="../plugins/zcode/src/index.ts" lines="12-12" hash="397a91e60cb0" blob="aacae79c0995" */}
+{/* ref file="../plugins/zcode/src/index.ts" lines="13-13" hash="397a91e60cb0" blob="5ec367b6c96e" */}
 
 {/* ref file="../plugins/zcode/package.json" lines="30-39" hash="bdbac67a47c7" blob="50940e18c637" */}
 
@@ -40,6 +40,7 @@ description: gwb-zcode 提供的命令与说明书，注入的服务与 peer 写
 | 页面地址 | ZCode 工作区窗口 | 地址含 `/out/renderer/index.html` | 认出工作区窗口 |
 | React 树 | ZCode 工作区窗口 | `memoizedProps.services.zcodeTaskService` / `zcodeAgentService` | 拿到客户端的任务服务与代理服务 |
 | 服务方法 | `zcodeTaskService` | `createTask`、`setMode`、`sendPrompt`、`getTaskSnapshot` | 建会话、切模式、发指令、读快照 |
+| 服务方法 | `zcodeTaskService` | `archiveTask`、`listArchivedTasks` | 归档会话、读回已归档列表核对 |
 | 服务方法 | `zcodeAgentService` | `readSession` | 读代理进程实际用的模式 |
 | 快照字段 | `getTaskSnapshot` | `meta.mode`、`meta.status`、消息的 `durationMs` | 显示的模式、任务状态、一条回答写完没有 |
 | 会话字段 | `readSession` | `settings.mode.current` | 代理实际用的模式（`session.mode` 可能是旧值） |

@@ -5,7 +5,7 @@
 
 export const modules = [
   { id: 'agent', title: 'agent', lines: ['经 MCP 入口 run 调命令'], x: 20, y: 20, w: 200, h: 72, color: '#ffd23f' },
-  { id: 'plugin', title: 'gwb 插件 gwb-zcode', lines: ['工作台主进程里', 'zcode.create / send / status', '切完全访问 · 发指令 · 读结果'], x: 300, y: 20, w: 260, h: 108, color: '#7bdff2' },
+  { id: 'plugin', title: 'gwb 插件 gwb-zcode', lines: ['工作台主进程里', 'zcode.create / send / status / archive', '切完全访问 · 发指令 · 读结果 · 归档'], x: 300, y: 20, w: 260, h: 108, color: '#7bdff2' },
   { id: 'skills', title: '说明书插件', lines: ['登记说明书 zcode'], x: 640, y: 20, w: 200, h: 72, color: '#e0e0e0' },
   { id: 'processes', title: 'Windows 进程表', lines: ['pwsh Get-CimInstance', '找唯一的 ZCode 主进程'], x: 20, y: 214, w: 200, h: 86, color: '#f6f5ae' },
   { id: 'main', title: 'ZCode 主进程', lines: ['Electron 的 Node', '调试端口 127.0.0.1:9229'], x: 300, y: 214, w: 260, h: 86, color: '#b2f7b1' },
@@ -21,7 +21,7 @@ export const seams = [
     to: [300, 56],
     label: [258, 44],
     title: 'agent → 插件',
-    text: 'agent 经 MCP 入口 run 调 zcode.create / send / status；认不出的参数、相对路径、不存在的目录直接报错。派活的两条发出即返回，status 最多等 240 秒，不碰 MCP 客户端 300 秒的上限。',
+    text: 'agent 经 MCP 入口 run 调 zcode.create / send / status / archive；认不出的参数、相对路径、不存在的目录直接报错。派活的两条发出即返回，status 最多等 240 秒，不碰 MCP 客户端 300 秒的上限。',
   },
   {
     n: 2,
@@ -53,7 +53,7 @@ export const seams = [
     to: [640, 423],
     label: [600, 411],
     title: '窗口 → 会话',
-    text: 'createTask（v4Create）建会话；代理的 settings.mode.current 不是 yolo 就 setMode，是 yolo 才 sendPrompt，等这一轮的提问出现在快照里就交回；status 读 getTaskSnapshot，这一轮的回答都写完（有 durationMs）且状态结束才算做完。',
+    text: 'createTask（v4Create）建会话；代理的 settings.mode.current 不是 yolo 就 setMode，是 yolo 才 sendPrompt，等这一轮的提问出现在快照里就交回；status 读 getTaskSnapshot，这一轮的回答都写完（有 durationMs）且状态结束才算做完；archive 调 archiveTask，用 listArchivedTasks 读回核对，还在跑的不归档。',
   },
   {
     n: 6,

@@ -1,0 +1,13 @@
+# 插件 zcode.archive（0.2.1-dev.20261002192635，隔离 home zcode-archive-2610021926），devkit.cdp cmd 回执摘要
+19:26:42 zcode.create（睡 40 秒的任务）：sess_16aa9887-6737-4a2b-8332-1cbc8046bcb4，status running
+19:26:55 zcode.archive sess_16aa9887…（还在跑）：ok false，「会话 … 还在跑，等这一轮做完（zcode.status 的 roundIsOver 为 true）再归档」
+19:26:57 zcode.archive sess_95a6961d…（没发过指令的空会话）：ok true {"title":"New session","archived":true}
+19:26:59 zcode.archive sess_d9afb1fd…（01 里已经归档过）：ok true {"title":"New session","archived":true}
+19:27:06 zcode.status sess_16aa9887… waitSeconds 120：47 秒交回 completed、replies ["睡醒了"]
+19:27:53 zcode.archive sess_16aa9887…（做完之后）：ok true {"title":"gwb-zcode 归档验收测试：sleep 40","archived":true}
+
+# 侧栏索引
+{"task_id":"sess_16aa9887-6737-4a2b-8332-1cbc8046bcb4","title":"gwb-zcode 归档验收测试：sleep 40","task_status":"completed","archived":1,"deleted":0}
+{"task_id":"sess_95a6961d-5f10-457e-8aea-be80a6171278","title":"New session","task_status":null,"archived":1,"deleted":0}
+{"task_id":"sess_d9afb1fd-24b7-4851-9bf0-81c7aa003cb5","title":"New session","task_status":null,"archived":1,"deleted":0}
+9229 已关闭

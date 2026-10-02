@@ -1,0 +1,23 @@
+---
+born-at: 2026-10-02T19:29
+type: choice
+parent: [2026-10-02-gwb-zcode]
+label: 加归档
+domain: gwb 工具插件
+---
+
+## 背景
+
+0.2.0 只有派活与查结果三条命令，测试下来 ZCode 侧栏里攒了十几条测试会话。用户说：「还要有归档现有会话的功能」。
+
+## 依据
+
+`probes/2610021925_archive-task/`：`runs/01` 是对一条空会话直接调 `zcodeTaskService.archiveTask` 的结果，侧栏索引 `archived` 变成 1、`deleted` 仍是 0；
+`runs/02` 是插件 `zcode.archive` 在隔离 home 里的验收，包括对还在跑的会话报错、对已归档的会话再调一次照样成功。
+
+pivots-from:: [发出即返回](2026-10-02-dispatch-then-poll.md)
+
+## 结论与边界
+
+加 `zcode.archive {workspace, task}`：调 `archiveTask` 后用 `listArchivedTasks` 读回核对（`archiveTask` 的返回里没有 `archived`）。还在跑的会话直接报错不归档：
+归档后它从侧栏消失，人就看不见它还在干活，这条限制是插件自己加的。不做取消归档，宿主进程里虽有 `unarchiveTask`，用户没要。只加命令、不改已有命令，版本升 y 到 0.2.1。

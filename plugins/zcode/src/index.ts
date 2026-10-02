@@ -3,7 +3,8 @@ import type { GwbContext } from '@godcreator/gwb-kernel-desktop'
 // 空的类型 import 只为让这几个包的 `declare module 'cordis'` 生效，ctx 上才有对应服务的类型
 import type {} from '@godcreator/gwb-commands'
 import type {} from '@godcreator/gwb-skills'
-import { MAX_WAIT_SECONDS, parseCreateArgs, parseSendArgs, parseStatusArgs } from './args.js'
+import { archiveTask } from './archive.js'
+import { MAX_WAIT_SECONDS, parseArchiveArgs, parseCreateArgs, parseSendArgs, parseStatusArgs } from './args.js'
 import { withDesktop } from './desktop.js'
 import { createTask, readRound, sendRound } from './round.js'
 
@@ -81,6 +82,26 @@ export function apply(ctx: GwbContext): void {
       const { workspace, task, waitSeconds } = parseStatusArgs(raw)
       requireExistingDirectory('zcode.status', workspace)
       return withDesktop(warn, async (services) => ({ ok: true, data: await readRound(services, { workspace, taskId: task, waitSeconds }) }))
+    },
+  )
+
+  commands.register(
+    {
+      name: 'zcode.archive',
+      description: '归档 ZCode 的一个会话：从侧栏的会话列表里收起来，记录不删',
+      usage:
+        '参数 { workspace: string, task: string }，同 zcode.send。还在跑（status 为 running）的会话直接报错，等这一轮做完再归档。' +
+        '归档后读回 ZCode 的已归档列表核对，回 { taskId, title, archived: true }；已经归档过的再调一次照样成功',
+      effect: 'write',
+    },
+    async (raw) => {
+      const { workspace, task } = parseArchiveArgs(raw)
+      requireExistingDirectory('zcode.archive', workspace)
+      return withDesktop(warn, async (services) => {
+        const archived = await archiveTask(services, { workspace, taskId: task })
+        log.info(`归档会话 ${task}`)
+        return { ok: true, data: archived }
+      })
     },
   )
 

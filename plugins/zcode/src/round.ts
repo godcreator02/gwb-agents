@@ -8,11 +8,11 @@ const START_WAIT_MS = 30_000
 const SNAPSHOT_MESSAGE_LIMIT = 50
 const CLIENT_MODE = 'desktop-continuous'
 const ASK_BEFORE_CHANGES_MODE = 'build'
-const RUNNING_STATUS = 'running'
+export const RUNNING_STATUS = 'running'
 
 const sleep = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms))
 
-async function snapshotOf(services: DesktopServices, workspace: string, taskId: string) {
+export async function snapshotOf(services: DesktopServices, workspace: string, taskId: string) {
   const raw = await services.call('zcodeTaskService', 'getTaskSnapshot', {
     workspacePath: workspace,
     taskId,

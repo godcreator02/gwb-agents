@@ -1,12 +1,12 @@
 ---
 title: ZCode 说明书（SKILL 正本）
 name: zcode
-description: 要把活派给本机的 ZCode（另一个 AI 客户端，走 GLM 额度）去做时读：批量迁移、批量改代码这类能写清范围的活。讲 zcode.create / send / status 怎么用、任务说明怎么写、怎么轮询结果、做完怎么复查。
+description: 要把活派给本机的 ZCode（另一个 AI 客户端，走 GLM 额度）去做时读：批量迁移、批量改代码这类能写清范围的活。讲 zcode.create / send / status / archive 怎么用、任务说明怎么写、怎么轮询结果、做完怎么复查与归档。
 ---
 
 # 给 ZCode 派任务
 
-`zcode.create` 在 ZCode 桌面端新建一条会话发任务，`zcode.send` 在已有会话里接着发，`zcode.status` 读最新一轮做完没有、回答是什么。
+`zcode.create` 在 ZCode 桌面端新建一条会话发任务，`zcode.send` 在已有会话里接着发，`zcode.status` 读最新一轮做完没有、回答是什么，`zcode.archive` 把用完的会话从侧栏收起来。
 会话出现在 ZCode 侧栏里，用户能看着它干、能在界面上接着聊。派活的两条都先把会话切到「完全访问」（改文件、运行命令都不先问人），**发出去就返回，不等做完**。
 参数与回执字段用 `search {"prefix":"zcode."}` 看 usage。
 
@@ -35,6 +35,11 @@ description: 要把活派给本机的 ZCode（另一个 AI 客户端，走 GLM �
 ## 复查
 
 ZCode 说「做完了」不算数：自己跑一次它说跑过的检查，`git diff` 看改动是不是在说好的范围里。批量任务至少抽查几项。
+
+## 收尾：归档
+
+复查过、不再接着用的会话：`zcode.archive {"workspace":"<建它时的目录>","task":"<taskId>"}`，从 ZCode 侧栏收起来，记录不删。
+还在跑的会话会报错，等 `status` 的 `roundIsOver` 为 `true` 再归档。用户还要在界面上看的，别替他归档。
 
 ## 批量派活
 

@@ -1,12 +1,12 @@
 ---
 title: 命令
-description: zcode.create、zcode.send、zcode.status 的参数、回执、什么情况下报错
+description: zcode.create、zcode.send、zcode.status、zcode.archive 的参数、回执、什么情况下报错
 ---
 
-**本页回答**：三条命令各收什么参数、回什么、什么情况下报错。派活的两条 `effect` 是 `external`：指令经 ZCode 发给外部的模型服务，ZCode 还会以完全访问权限改本机文件；
-`zcode.status` 不改数据，但同样要临时打开 ZCode 主进程的调试端口，标 `write`。
+**本页回答**：四条命令各收什么参数、回什么、什么情况下报错。派活的两条 `effect` 是 `external`：指令经 ZCode 发给外部的模型服务，ZCode 还会以完全访问权限改本机文件；
+`zcode.status` 不改数据，但同样要临时打开 ZCode 主进程的调试端口，标 `write`；`zcode.archive` 改 ZCode 的任务索引，标 `write`。
 
-一次派活的流程：`create`（或 `send`）拿到 `taskId` → 隔一阵 `status`，直到 `roundIsOver` 为 `true`。
+一次派活的流程：`create`（或 `send`）拿到 `taskId` → 隔一阵 `status`，直到 `roundIsOver` 为 `true` → 不再用的会话 `archive`。
 
 ## zcode.create
 
@@ -28,7 +28,7 @@ description: zcode.create、zcode.send、zcode.status 的参数、回执、什�
 
 两条派活命令回执相同：
 
-{/* ref file="../plugins/zcode/src/index.ts" lines="14-16" hash="574bd9a6514f" blob="cdfbe1b7026e" */}
+{/* ref file="../plugins/zcode/src/index.ts" lines="15-17" hash="574bd9a6514f" blob="5ec367b6c96e" */}
 
 | 字段 | 说明 |
 | --- | --- |
@@ -42,7 +42,7 @@ description: zcode.create、zcode.send、zcode.status 的参数、回执、什�
 
 读一个会话最新一轮（最后一条用户消息之后）的进度与回答。
 
-{/* ref file="../plugins/zcode/src/args.ts" lines="68-80" hash="d6018a42de96" blob="9c9c6bdf9e1f" */}
+{/* ref file="../plugins/zcode/src/args.ts" lines="77-89" hash="d6018a42de96" blob="c74bcdf352b0" */}
 
 | 参数 | 必给 | 说明 |
 | --- | --- | --- |
@@ -58,6 +58,15 @@ description: zcode.create、zcode.send、zcode.status 的参数、回执、什�
 | `fileChanges` | ZCode 记录的文件改动，原样带回 |
 | `pendingPermissions` | 非空表示停在等人确认，要去 ZCode 界面处理 |
 
+## zcode.archive
+
+把一个会话从 ZCode 侧栏的会话列表里收起来，记录不删，在 ZCode 的已归档列表里还看得到。参数 `workspace`、`task` 同 `zcode.send`。
+
+{/* ref file="../plugins/zcode/src/args.ts" lines="68-75" hash="4ac2a0ca4267" blob="c74bcdf352b0" */}
+
+回 `{ taskId, title, archived: true }`。还在跑（`status` 为 `running`）的会话直接报错，等 `zcode.status` 的 `roundIsOver` 为 `true` 再归档；
+已经归档过的再调一次照样成功。
+
 ## 报错
 
 命令执行失败时回 `ok: false`（经 MCP 入口是 `isError` 的文本），原因写在文本里：
@@ -69,4 +78,6 @@ description: zcode.create、zcode.send、zcode.status 的参数、回执、什�
 | `应有一个 ZCode 工作区窗口` | 请用户关掉多余的 ZCode 窗口 |
 | `找不到 services.…`、`快照形状不对`、`没有 settings.mode.current`、`没回 taskId` | ZCode 升级改了内部结构，插件要跟着改 |
 | `切换到完全访问 … 后代理的模式是` | 模式没切成，指令没发出 |
+| `还在跑，等这一轮做完 … 再归档` | 用 `zcode.status` 等它做完再 `zcode.archive` |
+| `调过 archiveTask 之后不在 … 的已归档列表里` | `workspace` 不是建这个会话时的目录，或 ZCode 改了归档的做法 |
 | `调试协议请求 … 无响应` | 先去 ZCode 侧栏看指令有没有发出去，再决定要不要重调 |

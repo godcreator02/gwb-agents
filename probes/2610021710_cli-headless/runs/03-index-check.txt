@@ -1,0 +1,10 @@
+{
+  "sessionId": "sess_c286a178-7cda-4898-8dfe-cc6866f1d6f8",
+  "inSessionDb": {
+    "id": "sess_c286a178-7cda-4898-8dfe-cc6866f1d6f8",
+    "title": "【派发测试】只读任务：数一下 vscode-workspace/ 目录下有几个 .code-workspace 文...",
+    "directory": "D:\\unitfolders\\00000-console\\console"
+  },
+  "modelSelection": "{\"modelSelection\":{\"providerId\":\"65693b32-7950-4b38-bd75-015b4698d14f\",\"modelId\":\"deepseek-v4-flash\",\"options\":{\"reasoningLevel\":\"max\"}}}",
+  "inSidebarIndex": null
+}

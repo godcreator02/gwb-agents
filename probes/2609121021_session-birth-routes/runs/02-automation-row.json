@@ -1,0 +1,62 @@
+{
+  "automation": {
+    "automation_id": "automation-ae327cdd-82fe-4cda-8d15-6b51e1792827",
+    "title": "会话出生实验：定时触发一次",
+    "cron_expr": "21 10 12 9 *",
+    "prompt": "会话出生实验（定时探针）：请只回复两个字：收到。不要使用任何工具，不要做任何其他事。",
+    "model": "builtin:bigmodel-coding-plan/GLM-5.3",
+    "provider": "glm",
+    "mode": "yolo",
+    "thought_level": "max",
+    "workspace_key": "D:\\unitfolders\\26090520ntn\\console",
+    "workspace_path": "D:\\unitfolders\\26090520ntn\\console",
+    "workspace_identity": null,
+    "target_task_id": "sess_cf9bec1d-aefe-4207-a123-24e0a7330f92",
+    "bot_delivery_target": null,
+    "location_kind": "local",
+    "recurring": 0,
+    "max_runs": null,
+    "end_at": null,
+    "schedule_rule": "{\"unit\":\"minute\",\"interval\":10,\"hour\":10,\"minute\":21,\"anchorAt\":1789179062970}",
+    "schedule_edited_by_user": 0,
+    "run_count": 1,
+    "scheduled_run_count": 1,
+    "enabled": 0,
+    "lifecycle_status": "completed",
+    "next_run_at": null,
+    "last_run_at": 1789179677273,
+    "running": 0,
+    "claimed_at": null,
+    "dispatch_status": "dispatched",
+    "dispatch_attempts": 0,
+    "retry_at": null,
+    "last_error": null,
+    "created_at": 1789179062971,
+    "updated_at": 1789179677273,
+    "model_selection": "{\"providerId\":\"account:bigmodel-individual-coding-plan\",\"modelId\":\"GLM-5.3\",\"options\":{\"reasoningLevel\":\"max\"}}"
+  },
+  "runs": [
+    {
+      "run_id": "automation-ae327cdd-82fe-4cda-8d15-6b51e1792827:1789179662970",
+      "automation_id": "automation-ae327cdd-82fe-4cda-8d15-6b51e1792827",
+      "workspace_key": "D:\\unitfolders\\26090520ntn\\console",
+      "scheduled_at": 1789179662970,
+      "trigger": "schedule",
+      "dispatch_status": "dispatched",
+      "outcome": "succeeded",
+      "session_id": "sess_cf9bec1d-aefe-4207-a123-24e0a7330f92",
+      "error": null,
+      "attempts": 0,
+      "created_at": 1789179676312,
+      "updated_at": 1789180019844,
+      "model_selection": null
+    }
+  ],
+  "sidebarTasks": [
+    {
+      "task_id": "sess_cf9bec1d-aefe-4207-a123-24e0a7330f92",
+      "title": "会话出生实验：定时触发一次",
+      "task_status": "completed"
+    }
+  ]
+}

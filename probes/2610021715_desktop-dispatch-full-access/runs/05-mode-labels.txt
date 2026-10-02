@@ -1,0 +1,24 @@
+== out/renderer/assets/IntlProvider-BNDfn-Cj.js @274727
+mode.label.glm.default":`默认模式`
+
+== out/renderer/assets/IntlProvider-BNDfn-Cj.js @274759
+mode.label.glm.build":`变更前确认`
+
+== out/renderer/assets/IntlProvider-BNDfn-Cj.js @274790
+mode.label.glm.edit":`自动编辑`
+
+== out/renderer/assets/IntlProvider-BNDfn-Cj.js @274819
+mode.label.glm.plan":`计划模式`
+
+== out/renderer/assets/IntlProvider-BNDfn-Cj.js @274848
+mode.label.glm.yolo":`完全访问`
+
+== out/renderer/assets/IntlProvider-BNDfn-Cj.js @673994
+mode.label.glm.default":`Default`
+
+== out/renderer/assets/IntlProvider-BNDfn-Cj.js @674029
+mode.label.glm.build":`Ask before changes`
+
+== out/renderer/assets/IntlProvider-BNDfn-Cj.js @674073
+mode.label.glm.edit":`Edit automatically`
+

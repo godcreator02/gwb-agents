@@ -1,0 +1,25 @@
+== out/scheduler/index.js @807197
+hrowOnError&&o)throw o}async initialize(n){await LV(BV(n),{recursive:!0}),this.db||(this.db=new zV(n),this.dbPath=n,this.db.exec(`PRAGMA busy_timeout = ${this.startupBusyTimeoutMs}`),this.db.exec("PRAGMA journal_mode = WAL"),this.db.exec("PRAGMA synchronous = NORMAL")),!Fs(n,this.db)&&(Bs(n,this.db)||Us(this.db))}getDatabase(){if(!this.db)throw new Error("AutomationRepo \u672A\u521D\u59CB\u5316\uFF1A\u8BF7\u5148 await ensureReady()");return this.db}getRow(n,o){return this.getDatabase().prepare(`SELECT * FROM automations
+        WHERE automation_id = @id
+          AND (@workspace_key IS NULL OR workspace_key = @workspace_key)`).get({id:n,workspace_key:o??null})??null}async create(n,o){Mx(n.mode),await this.ensureReady();let i=Date.now(),r=`automation-${Ax()}`,s=Se({workspacePath:n.workspacePath,workspaceIdentity:n.workspaceIdentity}),c=this.getDatabase();c.exec("BEGIN IMMEDIATE");try{let l=c.prepare("SELECT COUNT(*) AS count FROM automations").get();if(Number(l.count)>=20)throw new PS;c.prepare(`INSERT INTO aut
+
+== out/scheduler/index.js @809646
+s:n.maxRuns??null,end_at:n.endAt??null,schedule_rule:n.scheduleRule?JSON.stringify(n.scheduleRule):null,enabled:o.lifecycleStatus==="completed"?0:1,lifecycle_status:o.lifecycleStatus??"active",next_run_at:o.nextRunAt,created_at:i,updated_at:i}),c.exec("COMMIT")}catch(l){throw c.exec("ROLLBACK"),l}return vr(this.getRow(r))}async list(n){await this.ensureReady();let o=n?.workspacePath?Se({workspacePath:n.workspacePath,workspaceIdentity:n.workspaceIdentity}):null;return this.getDatabase().prepare(`SELECT * FROM automations
+        WHERE (@workspace_key IS NULL OR workspace_key = @workspace_key)
+        ORDER BY created_at DESC`).all({workspace_key:o}).map(vr)}async getModelSelectionForDispatch(n,o){await this.ensureReady();let i=this.getRow(n,o);if(!i)throw new Error("Automation \u4E0D\u5B58\u5728\u6216\u4E0D\u5C5E\u4E8E\u5F53\u524D\u5DE5\u4F5C\u533A");let r=Ux(i);if(r)return r;if(!(i.model_selection==="null"))throw new Error("Automation \u6A21\u578B\u9009\u62E9\u4E0D\u53EF\u7528\uFF0C\u8BF7\u91CD\u65B0\u9009\u62
+
+== out/scheduler/index.js @815401
+getDatabase();o.exec("BEGIN IMMEDIATE");try{o.prepare(`UPDATE automations
+        SET lifecycle_status = 'completed', enabled = 0, next_run_at = NULL,
+            retry_at = NULL, running = 0, claimed_at = NULL, updated_at = @now
+        WHERE enabled = 1 AND end_at IS NOT NULL AND end_at < @now`).run({now:n}),o.prepare(`UPDATE automations
+        SET running = 0, claimed_at = NULL
+        WHERE running = 1 AND claimed_at IS NOT NULL AND claimed_at <= @stale`).run({stale:n-zs});let i=o.prepare(`SELECT * FROM automations
+          WHERE enabled = 1 AND running = 0
+            AND (
+              (retry_at IS NOT NULL AND retry_at <= @now)
+              OR (retry_at IS NULL AND next_run_at IS NOT NULL AND next_run_at <= @now)
+            )`).all({now:n}),r=[],s=o.prepare(`UPDATE automations
+        SET running = 1, claimed_at = @now, dispatch_status = 'claimed', updated_at = @now
+        WHERE automation_id = @id AND running = 0`);for(let c of i)s.run({id:c.automation_id,now:n}).changes===1&&r.push(vr({...c,runn
+

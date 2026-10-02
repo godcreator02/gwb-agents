@@ -1,0 +1,47 @@
+---
+title: 插件之间怎么连
+description: gwb-zcode 提供的命令与说明书，注入的服务与 peer 写法，和 ZCode 桌面端靠哪些约定通道连着
+---
+
+**本页回答**：本仓插件提供哪些命令与说明书；注入了哪些服务、是必需还是局部注入、peer 怎么写；和 ZCode 桌面端靠哪些约定通道连着。
+
+## @godcreator/gwb-zcode
+
+### 提供
+
+| 类别 | 名字 | 说明 |
+| --- | --- | --- |
+| 命令 | `zcode.create` / `zcode.send` | 给 ZCode 桌面端派任务，形状见[命令](/docs/commands) |
+| 说明书 | `zcode` | 包根 `skills/zcode/`，经 `gwbSkills.register` 登记 |
+
+不提供服务、不注册窗格、不声明设置项。
+
+### 注入
+
+| 服务 | 提供方包 | 必需 / 局部注入 | peer 写法 | 用来做什么 | 缺了会怎样 |
+| --- | --- | --- | --- | --- | --- |
+| `gwbCommands` | `@godcreator/gwb-commands` | 必需（顶层 `inject`） | `^0.6.0` | 登记命令 | 插件不加载 |
+| `gwbSkills` | `@godcreator/gwb-skills` | 局部注入 | `^0.4.7`，可选 | 登记说明书 `zcode` | 照常加载；agent 读不到说明书 |
+
+内核包 `@godcreator/gwb-kernel-desktop`（`^0.10.1`）只提供接口类型。
+
+{/* ref file="../plugins/zcode/src/index.ts" lines="12-12" hash="397a91e60cb0" blob="aacae79c0995" */}
+
+{/* ref file="../plugins/zcode/package.json" lines="30-39" hash="bdbac67a47c7" blob="50940e18c637" */}
+
+### 按名字调用与约定通道
+
+全部是 ZCode 的内部结构，没有兼容承诺，ZCode 升级后最先要核对的就是这张表。
+
+| 通道 | 对方 | 名字 | 用来做什么 |
+| --- | --- | --- | --- |
+| 进程命令行 | ZCode 主进程 | 不含 `--type=`、`zcode.cjs`、`windows-helper` 的 `ZCode.exe` | 认出主进程 |
+| 本机端口 | ZCode 主进程 | `127.0.0.1:9229`，Node 调试协议 | 在主进程里执行脚本 |
+| 页面地址 | ZCode 工作区窗口 | 地址含 `/out/renderer/index.html` | 认出工作区窗口 |
+| React 树 | ZCode 工作区窗口 | `memoizedProps.services.zcodeTaskService` | 拿到客户端的任务服务 |
+| 服务方法 | `zcodeTaskService` | `createTask`、`setMode`、`sendPrompt`、`getTaskSnapshot` | 建会话、切模式、发指令、读快照 |
+| 模式值 | `zcodeTaskService` | `yolo` | 界面上的「完全访问」 |
+
+{/* ref file="../plugins/zcode/src/desktop.ts" lines="11-12" hash="e49b60617c05" blob="1cb48af3256e" */}
+
+{/* ref file="../plugins/zcode/src/task-progress.ts" lines="3-4" hash="a4db8864185b" blob="987594f93400" */}

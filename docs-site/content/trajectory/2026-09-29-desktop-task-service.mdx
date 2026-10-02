@@ -1,0 +1,29 @@
+---
+born-at: 2026-10-02T17:48
+type: evidence
+parent: [2026-10-02-gwb-zcode]
+label: 调客户端任务服务
+domain: gwb 工具插件
+---
+
+## 背景
+
+用户在 Codex 里问：「我想建立一个从你直接调用zcode的方式，比如给zcode派发一个任务让他做，看看怎么搞？」Codex 先跑通了 CLI 无界面，用户回：
+「我在zcode的客户端没看见啊，你这是cli调用吗」。Codex 一度转去用 computer-use 打开开发者工具，用户否掉：「啥玩意啊？我要的是你这边调用个什么代码就可以驱动，不是computer use去操作啊」。
+本卡在 2026-10-02 建仓时补记。
+
+## 依据
+
+`probes/2609291815_desktop-task-service/`：`scripts/` 是那次留下的脚本原样，`runs/01-codex-transcript.txt` 是对话原文。
+测试任务「ZCODE-SCRIPT-0929 代码入口验收指令」建成、发出、读回，同一会话续问答对了上一轮的代号。
+
+pivots-from:: [开会话五条路](2026-09-12-session-birth-routes.md)
+
+## 结论与边界
+
+ZCode 主进程是 Electron 的 Node：`process._debugProcess(pid)` 不用重启就能给它打开 9229 调试端口。连上后 `Runtime.evaluate` 取 Electron 的 `BrowserWindow`，
+在工作区窗口里 `executeJavaScript`，沿 React 树找到 `memoizedProps.services.zcodeTaskService`，调 `createTask`、`sendPrompt`、`getTaskSnapshot`。
+任务走客户端自己的创建流程，所以进侧栏——这是第一条能用代码建普通会话又进侧栏的路。
+
+`createTask` 要带 `v4Create: true`：不带时走旧的创建流程，跟现在的发送协议对不上，发送时报数据库关联错误。给它传 `mode` 不起作用，会话仍是 `build`。
+这条路依赖的 React 树结构、服务名、方法名都是 ZCode 内部的，没有任何兼容承诺。

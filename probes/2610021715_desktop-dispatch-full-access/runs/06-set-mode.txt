@@ -1,0 +1,6 @@
+== out/host/index.js @441825
+e,content:ae.content,timestamp:ae.timestamp}))}}),se=await Qt(J);return Gt({...se,migrationSource:"claudeCode"})},"createImportedSession"),onTaskImported:i(E=>{Be(E),Xe({workspacePath:E.workspacePath,workspaceIdentity:E.workspaceIdentity,taskId:E.taskId},E,"task_meta_changed")},"onTaskImported")})},async setMode(w){let E=vt(w.taskId);await b(E,Ou(w.mode)??"build");let Z=await rn(E);await Qt(Z)},async setConfigOption(w){let E=vt(w.taskId);if(w.configId===gU)return $t.setModel({taskId:w.taskId,traceId:w.traceId,modelSelection:ph(w.value)});if(w.configId===yU){let se=(await e.zcodeAgentService.readSession({worksp
+
+== out/host/index.js @752943
+alues.map(ce=>({value:ce,name:ce}))}]:[]}i(E,"listDraftConfigOptions");async function Z(h,P,I){let N=h.draftOptions;if(!N)return;let R=await Vr(h,P),$=R.find(ce=>ce.category==="mode"&&ce.type==="select"),V=Ci(R,II,N.provider);$?.id&&V?await(await ft(h)).setMode({taskId:P,mode:V}):$?.id&&Ut.debug(I,`skip forced yolo mode unsupported provider=${N.provider}`)}i(Z,"applyDraftConfigOptions");function J(h){return[h.botId,h.provider,h.chatId?.trim()||h.providerUserId].join("::")}i(J,"getActorContextKey");function se(h){let P=i(I=>I===h||I.startsWith(`${h}::`),"matchesBot");for(let I of g.keys())P(I)&&g.delete(I);for(let 
+

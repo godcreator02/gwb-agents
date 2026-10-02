@@ -1,0 +1,463 @@
+# 会话出生实验：定时触发一次
+会话 sess_cf9bec1d-aefe-4207-a123-24e0a7330f92，目录 D:\unitfolders\26090520ntn\console，建于 2026-09-12T01:54:50.801Z
+
+## user
+zcode能不能操纵自己在左侧栏开一个新会话？而不是必须人手工点呢？--block
+
+## assistant
+先说结论的方向：我手上的工具里确实有一条今天就能做到的路（computer-use 直接点左侧栏），但它是不是“该走的路”取决于你要这个新会话干什么。我先做两个只读的核实——看 zcode CLI 有没有无头开会话的模式、本机 `.zcode` 目录长什么样——不写任何东西，然后把完整的取舍摆给你。
+
+（assistant 调用工具 Bash）
+
+（assistant 调用工具 Bash）
+
+（assistant 调用工具 Bash）
+
+（assistant 调用工具 Read）
+
+## assistant
+有收获：本机注册了 `zcode://` 协议（deep link 通道是真的），`cli` 下有 `db` / `rollout` / `exec` 这些目录。再看一眼协议背后指向什么可执行文件、会话存储长什么样，就收手写分析。
+
+（assistant 调用工具 Bash）
+
+（assistant 调用工具 Bash）
+
+## assistant
+`zcode://` 协议确实注册了，接单的就是桌面版 `ZCode.exe`；会话本体存在 `.zcode\cli\exec\sess_*` 目录、索引在 `db.sqlite`。还有个有意思的发现：子代理的会话（`sess_subagent_agent_*`）也落同一个库。最后两眼只读确认——宿主程序目录里有没有可用的 CLI、ZCode 此刻在不在 computer-use 的可见范围内——然后给你完整分析。
+
+（assistant 调用工具 Bash）
+
+（assistant 调用工具 mcp__computer-use__list_apps）
+
+## assistant
+# 结论：分三层——能点到、早就在开、但你要的那扇门另有钥匙
+
+**TLDR：**「点开一个新会话」我今天就能做到（computer-use 直接操作左侧栏）；但取证后发现更本质的事实——**agent 开新会话这件事天天都在发生**（每次派子代理就在本机铸造一条新会话），你真正要的是「开一条**人可见、可点进去、可 resume 的主会话**」，那是一道宿主的门，目前的钥匙有三把，各有利弊。
+
+## 取证到的事实
+
+- ZCode 是 Electron 应用，正在运行（pid 69200），computer-use 看得见它——GUI 路今天可走。
+- 本机注册了 **`zcode://` 协议**，接单的就是桌面版 `ZCode.exe`。这是宿主留给外部的 deep-link 通道，但它认不认「开新会话」之类的命令形态，没验证。
+- **没有 CLI**：PATH 上没有 `zcode`，`.zcode\cli` 是数据目录不是发行版；会话本体在 `exec\sess_*`、索引在 `db.sqlite`。
+- 那个目录里躺着四五十条 `sess_*` 主会话、上百条 `sess_subagent_agent_*`——**子代理就是会话**，同一个库、同一种 id（`ReadSessionContext` 都能读）。宿主把它们按命名分类，大概率左侧栏只列前一类。
+
+## 各条路的账
+
+| 路 | 今天可行 | 稳定性 | 返回通道 |
+| --- | --- | --- | --- |
+| GUI 点左侧栏（computer-use） | 是 | 脆：像素无语义 | 得自己搭（约文件 / 猜 sess id） |
+| `zcode://` deep link | 未验证 | 若认命令则稳 | 看命令形态 |
+| 派子代理（已有机制） | 是 | 稳 | 完整：TaskOutput 收结果 |
+| 伪造 `db.sqlite` / `exec\` 条目 | 冻结中，且永远是坏主意 | 死路：第二份真相 | — |
+| 给 ZCode 提「申请主会话」命令 | 不是本会话能落的事 | 最稳，可带守卫 | 可设计 |
+
+GUI 路具体有四笔账：一是**抢焦点**——点完新会话，你的屏幕跳到那个空会话，我这条退到后台，你回来看不到我的回答（至少要「收尾时才点」的时序纪律）；二是**像素没有语义**——UI 一改版点击就落空，这跟 gwb 那边「端口没有语义、敲错一位落在另一个现场」是同款判例，而且 Electron 的无障碍树常露不全，露不全就只能走前台坐标点击，更脆；三是**开出来是空的**——还得配套往输入框注入第一句 prompt，每步都是脆弱点；四是**没有返回通道**——它干完活的结果怎么回到我手里，得另想办法。
+
+`zcode://` 是最像「正门」的候选：如果它认某个开新会话的命令，`Start-Process "zcode://…"` 一行就是干净、不抢语义的开工方式。验证只要试一枚（或翻 `resources` 里的路由表），但那是动手，等你解锁。
+
+## 关键反问：你要新会话图的是什么？
+
+1. **只是并行分身、结果要回到我手里** → 子代理已经完整够用（后台跑、完成通知、TaskOutput 收结果），不必动宿主 UI。
+2. **要人能看见、随时插手、事后 resume 的独立现场** → 才需要真·左侧栏会话；那值得先花五分钟验证 deep link 认不认，认了它就是最优解，不认再拿 GUI 点击当权宜。
+3. **要让「开新会话」成为可编排的一环**（比如一条流程自动铺开 N 个现场）→ 必须走有合同的路（deep link 或提需求）并配守卫——谁付 token、数量上限、防递归繁殖——GUI 点击撑不起编排。
+
+顺带一句本质：左侧栏是宿主开给人的作业面，agent 往里塞会话等于往人的桌面上堆东西。真到要长期用的那天，正路大概率是给 ZCode 提一枚带守卫的「申请主会话」命令，而不是让 agent 从窗外爬进去。
+
+上面全部是只读取证加分析，没动任何东西。要动手验证 deep link、或演示一次 GUI 点击，等你一句 go。
+
+## user
+先尝试下comouteruse和gui之外的路，最后试这俩，做完整实验吧 --allow
+
+## assistant
+收到，解锁了。我按顺序做完整实验：先走非 GUI 的路（deep link 语法侦察、本地端口、CLI、子代理对照、定时自动化探针、只读 db 取证），computer-use/GUI 放最后，全程用 `exec\sess_*` 目录的基线快照做「新会话是否出生」的判据。
+
+（assistant 调用工具 TodoWrite）
+
+（assistant 调用工具 Bash）
+
+（assistant 调用工具 Bash）
+
+（assistant 调用工具 Bash）
+
+（assistant 调用工具 Bash）
+
+## assistant
+端口那路堵死了（ZCode 没监听任何 TCP 口，没有本地 HTTP API 可调）。但有意外发现：`.zcode\v2` 里有 `bot-state.v2.json` 和 `bots-runtime-locks`——v2 世代管会话叫「bot」。下一批：从 307MB 的 `app.asar` 里挖 `zcode://` 的路由语法，同时看看 v2 的 bot 状态文件和 unpacked 目录。
+
+（assistant 调用工具 Bash）
+
+（assistant 调用工具 Bash）
+
+（assistant 调用工具 Bash）
+
+（assistant 调用工具 Bash）
+
+## assistant
+重大发现：`zcode://` 的语法表里**只有三条**——`oauth/callback`、`payment/callback`、`workspace/open`，没有任何「新会话」路由；但代码里 `createSession` 出现 90 次、`sessions/create` 2 次——内部明明有这个 API，只是从外面够不着（没有监听端口）。现在挖这几处的上下文，看 `workspace/open` 收什么参数、`createSession` 是不是纯内部 IPC，顺便看看 resources 下那几个 config/tools 目录里有没有 CLI。
+
+（assistant 调用工具 Bash）
+
+（assistant 调用工具 Bash）
+
+（assistant 调用工具 Bash）
+
+（assistant 调用工具 Bash）
+
+## assistant
+grep 在这台机器上是 urep 别名，UTF-8 模式下 `.{0,400}` 超复杂度限制——加 `-U` 按字节匹配重试。另外盯上一个关键货：`resources\glm\zcode.cjs`，一个打包好的核心引擎文件，很可能就是 CLI 入口，直接试 `--help`。同时把 10 分钟后的一次性定时探针挂上。
+
+（assistant 调用工具 Bash）
+
+（assistant 调用工具 Bash）
+
+（assistant 调用工具 Bash）
+
+（assistant 调用工具 Bash）
+
+（assistant 调用工具 CronCreate）
+
+## assistant
+突破：`zcode.cjs` 就是完整的 CLI（0.16.5），带 `--prompt` 无头模式、`--resume`、`/new`，而且有个意味深长的参数——**`--surface desktop`：无头 prompt 可以把呈现面交给桌面端**。这就是「非 GUI 路」的头号候选。定时探针也挂上了（10:21 触发）。现在按顺序实测：先终端面无头 prompt，看 stdout 是否吐 session id、exec 库是否新增。
+
+（assistant 调用工具 Bash）
+
+## assistant
+CLI 要显式的模型配置（`~\.zcode\cli\config.json` 现在只有空的 hooks 段），而桌面端显然有自己的一套登录态。关键线索：桌面端多半就是拿这个 `zcode.cjs` 当子进程跑的——直接看进程树里它怎么被拉起的，照抄参数就行。
+
+（assistant 调用工具 Bash）
+
+（assistant 调用工具 Bash）
+
+（assistant 调用工具 Bash）
+
+## assistant
+进程树把底牌全掀了：**桌面端的每个会话就是一支 `zcode.cjs app-server --stdio --surface desktop` 子进程**，插件则走 `__zcode-plugin-host`。而且顺带看到了我自己的会话 id（`sess_cf9bec1d-…`，bash 启动脚本里带出来了）。现在缺的是 CLI 独立跑时的模型配置从哪来——看 v2 的 config、Electron 的 session 目录、模型目录清单的形状。
+
+（assistant 调用工具 Bash）
+
+（assistant 调用工具 Bash）
+
+（assistant 调用工具 Bash）
+
+## assistant
+配置找到了：`.zcode\v2\config.json` 里有完整的 provider 配置（含可用的 apiKey），`credentials.json` 是共享登录态——桌面端和 CLI 看来本就该共享这套东西，只是 CLI 那份 `cli\config.json` 还是空的。先不动共享正本，拷一份到 out\ 用 `--settings` 试；不行再备份后合并进正本、实验完还原。
+
+（assistant 调用工具 Bash）
+
+## assistant
+`--settings` 在 help 里挂着、解析器却不认——文档与实现有漂移。那就走正路：备份 `cli\config.json`，把 v2 的 provider 块合并进去，实验跑完还原。
+
+（assistant 调用工具 Bash）
+
+（assistant 调用工具 Bash）
+
+## user
+The TodoWrite tool hasn't been used recently. If you're working on tasks that would benefit from tracking progress, consider using the TodoWrite tool to track progress. Also consider cleaning up the todo list if has become stale and no longer matches what you are working on. Only use it if it's relevant to the current work. This is just a gentle reminder - ignore if not applicable.
+
+Here are the existing contents of your todo list:
+
+[1. [in_progress] 基线快照 exec\sess_* 清单到 out/
+2. [pending] 侦察非 GUI 面：resources/asar 的 zcode:// 路由、ZCode 监听端口、.zcode 其余目录
+3. [pending] 定时自动化探针：CronCreate 一次性，观察落点
+4. [pending] 对照组：派最小子代理，确认会话落库
+5. [pending] deep link 实验：按发现的语法试射 zcode://
+6. [pending] CLI 探查：app resources 内与 npm 全局
+7. [pending] db 只读取证（拷贝到 out\，不碰正本）
+8. [pending] GUI 实验（最后）：无障碍树/坐标点新建会话→验证→切回原会话
+9. [pending] 汇总实验报告]
+
+## assistant
+合并了还是不认——CLI 要的形状跟 v2 那份不一样。直接拿 node 在 `zcode.cjs` 里按字节定位这段报错的上下文，看它到底读哪个字段。
+
+（assistant 调用工具 Bash）
+
+（assistant 调用工具 Bash）
+
+## assistant
+包是压缩过的，改从「报错工厂 `eMe(` 的调用点」反查它检查的字段——调用点旁边就是判定条件。
+
+（assistant 调用工具 Bash）
+
+## assistant
+命中要害：判定读的是 `config.model`（不是 `provider`）。找加载器 `ns` 的定义，看 `model` 块的完整形状。
+
+（assistant 调用工具 Bash）
+
+## assistant
+加载器清楚了：user 配置里要的是顶层 `model` 键（`hasModel = r.config.model!==void 0`）。再挖两处——`modelTargets` 和 `targetToProviderConfig` 的定义——把 `model` 块的精确形状拼出来。
+
+（assistant 调用工具 Bash）
+
+## assistant
+形状拼出来了：`model` 块的 target 是 `{provider, model, kind, baseURL, apiKey}`，`v4i` 生成 `provider/model` 引用键。provider id 里带冒号会被推断成 openai-compatible，所以 `kind:"anthropic"` 必须显式给。写进配置，跑第一发真弹。
+
+（assistant 调用工具 Bash）
+
+（assistant 调用工具 Bash）
+
+（assistant 调用工具 Bash）
+
+（assistant 调用工具 Bash）
+
+（assistant 调用工具 Bash）
+
+## user
+The TodoWrite tool hasn't been used recently. If you're working on tasks that would benefit from tracking progress, consider using the TodoWrite tool to track progress. Also consider cleaning up the todo list if has become stale and no longer matches what you are working on. Only use it if it's relevant to the current work. This is just a gentle reminder - ignore if not applicable.
+
+Here are the existing contents of your todo list:
+
+[1. [in_progress] 基线快照 exec\sess_* 清单到 out/
+2. [pending] 侦察非 GUI 面：resources/asar 的 zcode:// 路由、ZCode 监听端口、.zcode 其余目录
+3. [pending] 定时自动化探针：CronCreate 一次性，观察落点
+4. [pending] 对照组：派最小子代理，确认会话落库
+5. [pending] deep link 实验：按发现的语法试射 zcode://
+6. [pending] CLI 探查：app resources 内与 npm 全局
+7. [pending] db 只读取证（拷贝到 out\，不碰正本）
+8. [pending] GUI 实验（最后）：无障碍树/坐标点新建会话→验证→切回原会话
+9. [pending] 汇总实验报告]
+
+## assistant
+配置块在、形状也对，但 CLI 还是说不认——多半是 user 配置的 zod 校验把整份文件判了不合格（`r.loaded=false`），静默降级成「没配置」。挖加载器 `Nee` 看它的判定与容错。
+
+（assistant 调用工具 Bash）
+
+（assistant 调用工具 Bash）
+
+## assistant
+路径确认没错，问题是 `v_r.parse` 整份校验——我从 v2 抄来的 `provider` 块八成不是 CLI 用户配置的合法键，一票否决整份文件。瘦身成 `{hooks, model}` 再跑，加 `--verbose` 让它吐诊断。
+
+（assistant 调用工具 Bash）
+
+（assistant 调用工具 Bash）
+
+## assistant
+Schema 是 passthrough 的、`provider` 键也合法——那问题多半在 `model` 的内层校验或 enrichment。看 `wAo`、`iRo`（parseModelConfig）、`bot`（enrichModelTarget）三个。
+
+（assistant 调用工具 Bash）
+
+（assistant 调用工具 Bash）
+
+## assistant
+破案了：`model.main` 不是对象、是**字符串引用** `"provider/model"`（`xot` 是 refine 过的 string），而且 `bAo` 是 strict 的——多余键直接否决。credentials 靠 `provider` 块的 def 补全。重写：provider 块（v2 原样）+ `model.main = "builtin:bigmodel-coding-plan/GLM-5.3"`。
+
+（assistant 调用工具 Bash）
+
+## assistant
+还是不认。直接看预处理 `YAo`（normalizeConfigFileInput）——parse 之前它先动一遍配置，可能在这一步把 `model` 弄丢了。
+
+（assistant 调用工具 Bash）
+
+## assistant
+静态分析到头了，改动态取证：写个 fs 探针垫在 `--require` 里，看 CLI 到底读没读那份 config.json、读了哪些路径——顺便确认文件没被它的迁移逻辑改写。
+
+（assistant 调用工具 Bash）
+
+（assistant 调用工具 Bash）
+
+## user
+The TodoWrite tool hasn't been used recently. If you're working on tasks that would benefit from tracking progress, consider using the TodoWrite tool to track progress. Also consider cleaning up the todo list if has become stale and no longer matches what you are working on. Only use it if it's relevant to the current work. This is just a gentle reminder - ignore if not applicable.
+
+Here are the existing contents of your todo list:
+
+[1. [in_progress] 基线快照 exec\sess_* 清单到 out/
+2. [pending] 侦察非 GUI 面：resources/asar 的 zcode:// 路由、ZCode 监听端口、.zcode 其余目录
+3. [pending] 定时自动化探针：CronCreate 一次性，观察落点
+4. [pending] 对照组：派最小子代理，确认会话落库
+5. [pending] deep link 实验：按发现的语法试射 zcode://
+6. [pending] CLI 探查：app resources 内与 npm 全局
+7. [pending] db 只读取证（拷贝到 out\，不碰正本）
+8. [pending] GUI 实验（最后）：无障碍树/坐标点新建会话→验证→切回原会话
+9. [pending] 汇总实验报告]
+
+## assistant
+重大发现：探针抓到 CLI 还在读**项目级配置** `console\.zcode\config.json`——这个仓里有个 `.zcode/` 目录（git status 里那批未跟踪文件）！看它写了什么。
+
+（assistant 调用工具 Bash）
+
+## assistant
+项目配置全是 hooks，不背锅。那嫌疑回到 `provider` 块的形状——CLI 的 provider def schema（`xAo`）跟 v2 app 那份未必同形，一处不合就整份判废。查 `xAo`。
+
+（assistant 调用工具 Bash）
+
+（assistant 调用工具 Bash）
+
+## assistant
+schema 全是 passthrough、apiKey 合法——静态上这份文件应该过。改用变体二分法实测：先验证当前文件确实还报错 + 确认 `model` 键在文件里，然后换成「只有 model 键」的最小变体，看报错会不会变——变了就证明 parse 通了、毒在别处。
+
+（assistant 调用工具 Bash）
+
+## assistant
+报错变了——`model` 键通了，毒在 `provider` 块（v2 的 def 里 `models.*.zcode` 这类额外键八成让 strict 的 yAo 判了死刑，连坐整份文件）。换最小 provider def（不带 models，只留 kind+options）再试。
+
+（assistant 调用工具 Bash）
+
+## assistant
+**CLI 路打通了！** 无头 prompt 真的铸造了一条主会话：`sess_4f9733dc-…`，模型回话「收到」，用量、trace 全有。现在两件事：确认它落进了会话库；再试王炸——`--surface desktop`，看会话能不能直接交给桌面端呈现在左侧栏。
+
+（assistant 调用工具 Bash）
+
+## assistant
+耐人寻味：CLI 铸的会话**没有**在 `exec\` 开目录——交互会话才占 exec 目录，无头会话多半只进了 db.sqlite。全盘搜这个 id 看它落在哪。
+
+（assistant 调用工具 Bash）
+
+## assistant
+CLI 会话进了 db.sqlite（10:19:37 被写过）+ rollout 留了 model-io 日志，只是不占 exec 目录——桌面端左侧栏读的就是这个库，有没有显示等 GUI 阶段亲眼验。现在放王炸：`--surface desktop`。
+
+（assistant 调用工具 Bash）
+
+（assistant 调用工具 CronList）
+
+## assistant
+`--surface desktop` 无头照跑不误（会话 `sess_45435d4c`），没有报错也没见它强抢桌面——它到底在桌面端显不显示，留给 GUI 阶段眼见为实。先补两个关键验证：`--resume` 回环控制（证明我能迭代驱动这条铸造出来的会话），顺便看定时探针（10:21 该 fired 了）。
+
+（assistant 调用工具 Bash）
+
+## assistant
+回环验证过了：`--resume` 带着新 turn 又跑了一趟，还是那条 `sess_4f9733dc`——**agent 可以反复驱动自己铸造的会话**。定时探针 10:21:17 也 fired 了（runCount=1，已完成）。查它的会话落在哪，然后打最后一发非 GUI 弹：deep link。
+
+（assistant 调用工具 Bash）
+
+（assistant 调用工具 Bash）
+
+## user
+The TodoWrite tool hasn't been used recently. If you're working on tasks that would benefit from tracking progress, consider using the TodoWrite tool to track progress. Also consider cleaning up the todo list if has become stale and no longer matches what you are working on. Only use it if it's relevant to the current work. This is just a gentle reminder - ignore if not applicable.
+
+Here are the existing contents of your todo list:
+
+[1. [in_progress] 基线快照 exec\sess_* 清单到 out/
+2. [pending] 侦察非 GUI 面：resources/asar 的 zcode:// 路由、ZCode 监听端口、.zcode 其余目录
+3. [pending] 定时自动化探针：CronCreate 一次性，观察落点
+4. [pending] 对照组：派最小子代理，确认会话落库
+5. [pending] deep link 实验：按发现的语法试射 zcode://
+6. [pending] CLI 探查：app resources 内与 npm 全局
+7. [pending] db 只读取证（拷贝到 out\，不碰正本）
+8. [pending] GUI 实验（最后）：无障碍树/坐标点新建会话→验证→切回原会话
+9. [pending] 汇总实验报告]
+
+## assistant
+deep link 发出去了、没炸也没开会话（它本来就只是 workspace 开门器）；定时探针的落点在 rollout 里看不见——可能进了 v2 日志或干脆在桌面端排队。进 GUI 阶段：先看 v2 日志里 cron 那一趟，同时抓 ZCode 的无障碍树和截图，亲眼验证三件事：CLI 铸的会话在不在左侧栏、deep link 干了什么、「新建会话」按钮长什么样。
+
+（assistant 调用工具 Bash）
+
+（assistant 调用工具 mcp__computer-use__get_app_state）
+
+## assistant
+Electron 的无障碍树果然近乎全空——只剩窗口按钮和俩匿名 textarea，侧栏元素一个不露，GUI 只剩坐标点击一条道。截图已经拿到（1280×760 的栅格），先拿视觉模型读图：左侧栏都列了哪些会话（CLI 铸的那两条在不在）、「新建会话」按钮在哪、刚才那发 deep link 有没有弹出什么。同时翻 v2 日志找 10:21:17 定时触发那一趟。**🌐 Z.ai Built-in Tool: analyze_image**
+
+**Input:**
+```json
+{"imageSource":"https://maas-log-prod.cn-wlcb.ufileos.com/anthropic/cf9bec1d-aefe-4207-a123-24e0a7330f92/7db24ebe9407e89d543616f9d217ae72.jpg?UCloudPublicKey=TOKEN_e15ba47a-d098-4fbd-9afc-a0dcf0e4e621&Expires=1789181535&Signature=eFNLJLwtnFDJ9zaU0Gl+J3ceswQ=","prompt":"这是一张桌面应用 ZCode 的截图（1280x760）。请详细回答：1) 最左侧的会话列表（sidebar）里列出了哪些会话条目？逐条读出它们的标题文字和当前哪条被选中高亮。2) 「新建会话」的按钮（通常是 + 号或「New」字样）在图中的什么位置？给出大致像素坐标（以 1280x760 为坐标系）。3) 画面中有没有弹窗、对话框、提示条（比如 workspace 选择器、toast 通知）？4) 主区域当前显示的是什么内容？"}
+```
+*Executing on server...*
+**Output:**
+**analyze_image_result_summary:** [{"text": "\"## 1) 左侧会话列表内容\\n\\n**固定功能区（自上而下）：**\\n- 新建任务（右侧标注快捷键 Ctrl+N）\\n- 搜索（Ctrl+K）\\n- 自动化\\n- 插件市场\\n- 分组 / 项目（带 # 图标，右侧有 # 和垃圾桶小图标）\\n\\n**「定时任务」分组（蓝色高亮，标注数量 1）：**\\n- 会话出生实验：定时触发一次 —— 右侧标“刚刚”，**这一条左侧有蓝色竖条，是被选中/高亮状态**\\n\\n**普通会话列表（按时间排序）：**\\n- 调整 agents.md 让 gwb 参与实例使用 —— 29分\\n- Fork of ...
+                                                截图信息量大：**定时任务分组里躺着我的探针**（「会话出生实验：定时触发一次 · 刚刚」，蓝色高亮）——CronCreate 的自动化在左侧栏是一等公民；而两条 CLI 无头会话**不在可见列表里**。「新建任务」按钮在左上 (≈60,60)，无障碍树果然只有壳（Chrome Legacy Window），只能走坐标点击。先从 v2 日志把 cron 那趟的执行体挖出来，然后动 GUI。
+
+（assistant 调用工具 Bash）
+
+（assistant 调用工具 Bash）
+
+## assistant
+v2 日志实锤：定时触发的执行体是桌面端自己的 **zcode-task-service**（sendPrompt → ACK，19ms）——CronCreate 是「宿主 sanctioned」的开会话机制，跑在 app 内、呈现在左侧栏定时任务分组。现在 GUI 收官：坐标点「新建任务」（栅格 ≈60,60）。
+
+（assistant 调用工具 mcp__computer-use__left_click）
+
+（assistant 调用工具 mcp__computer-use__wait）
+
+（assistant 调用工具 mcp__computer-use__get_app_state）
+
+## assistant
+一发入魂——点击不仅开出了**新会话**（输入框已聚焦、问候语「上午好呀」），还把 Chromium 的无障碍树整个激活了：155 个元素全语义可见，侧栏会话逐条可数。确认它的 exec 目录和 sess id，然后把探针 prompt 打进去走完闭环。
+
+（assistant 调用工具 Bash）
+
+## assistant
+exec 目录还没长出来——跟 CLI 无头会话一样，目录是懒建的，UI 里新会话已经是不争的事实。打字进去，走完「开出来还能干活」的最后一环。
+
+（assistant 调用工具 mcp__computer-use__type）
+
+（assistant 调用工具 mcp__computer-use__get_app_state）
+
+## assistant
+字没落进去（输入框还空着、发送仍灰）——AX 的 set-value 路被 React 状态甩了。换原路：先点聚焦输入框，再走窗口级键盘直打。
+
+（assistant 调用工具 mcp__computer-use__left_click）
+
+（assistant 调用工具 mcp__computer-use__type）
+
+## user
+The TodoWrite tool hasn't been used recently. If you're working on tasks that would benefit from tracking progress, consider using the TodoWrite tool to track progress. Also consider cleaning up the todo list if has become stale and no longer matches what you are working on. Only use it if it's relevant to the current work. This is just a gentle reminder - ignore if not applicable.
+
+Here are the existing contents of your todo list:
+
+[1. [in_progress] 基线快照 exec\sess_* 清单到 out/
+2. [pending] 侦察非 GUI 面：resources/asar 的 zcode:// 路由、ZCode 监听端口、.zcode 其余目录
+3. [pending] 定时自动化探针：CronCreate 一次性，观察落点
+4. [pending] 对照组：派最小子代理，确认会话落库
+5. [pending] deep link 实验：按发现的语法试射 zcode://
+6. [pending] CLI 探查：app resources 内与 npm 全局
+7. [pending] db 只读取证（拷贝到 out\，不碰正本）
+8. [pending] GUI 实验（最后）：无障碍树/坐标点新建会话→验证→切回原会话
+9. [pending] 汇总实验报告]
+
+（assistant 调用工具 mcp__computer-use__key）
+
+（assistant 调用工具 mcp__computer-use__wait）
+
+（assistant 调用工具 mcp__computer-use__get_app_state）
+
+## assistant
+GUI 路全链路闭环成功：prompt 落框、Enter 发出、11 秒后回了「收到」，左侧栏多出一条**「会话出生实验（GUI 面）· 刚刚」**——agent 自己开出来、人看得见、可继续用的会话。现在把用户的视图切回他原来开着的那条会话，收尾。
+
+（assistant 调用工具 mcp__computer-use__left_click）
+
+（assistant 调用工具 Bash）
+
+（assistant 调用工具 Bash）
+
+（assistant 调用工具 TodoWrite）
+
+## assistant
+# 实验报告：能，而且有三条活路——最优的一条恰恰不是 GUI
+
+**TLDR：**「agent 自己在左侧栏开新会话」今天完整跑通了——computer-use 点按钮那条路全程演示成功（新会话已出现在你左侧栏，我刚把视图切回你原来那条）。但更大的收获是试出了两条非 GUI 的路：**ZCode 自带的 CLI 内核可以无头铸造会话并反复驱动它**，以及 **CronCreate 定时自动化是宿主官方认证的「开会话」机制、直接进左侧栏**。三条路各有各的用场，明细如下。
+
+## 实验结果总表
+
+| 路 | 结果 | 证据 |
+| --- | --- | --- |
+| CLI 无头（`zcode.cjs --prompt`） | ✅ 开会话 + 完全可驱动，**但不进左侧栏** | 铸出 `sess_4f9733dc`、`sess_45435d4c`，stdout 回 sessionId 与回复「收到」；`--resume` 带 turn 2 又跑一趟，回环成立 |
+| CronCreate 定时自动化 | ✅ 宿主认证，**进左侧栏**（定时任务分组） | 10:21:17 fired，v2 日志实锤由桌面端 `zcode-task-service` 执行；侧栏「定时任务」组现挂着「会话出生实验：定时触发一次 · 刚刚」 |
+| GUI（computer-use） | ✅ 全链路：开新会话→打字→回复→侧栏可见 | 坐标点「新建任务」开出空会话；键盘注入 prompt；11 秒后回「收到」；侧栏新增「会话出生实验（GUI 面） · 刚刚」 |
+| `zcode://` deep link | ❌ 死路 | asar 全文只有 `oauth/callback`、`payment/callback`、`workspace/open` 三条路由，没有会话路由 |
+| 本地 HTTP API | ❌ 死路 | ZCode 进程零监听 TCP 口 |
+| 伪造 db.sqlite | 未做，也不该做 | 活库带 WAL，直写等于第二份真相，升级即死 |
+
+## 挖出来的机制（比实验本身更值钱）
+
+- **桌面端的每个会话就是一支子进程**：`zcode.cjs app-server --stdio --surface desktop`，插件走 `__zcode-plugin-host`——进程树里看得一清二楚。CLI 和桌面端是同一个内核家族（CLI 0.16.5 / 桌面 3.11.2，有版本漂移，这是 CLI 路的脆弱点）。
+- **CLI 路有个隐蔽的配置坑**：`~\.zcode\cli\config.json` 里 `model.main` 必须是字符串引用 `"builtin:bigmodel-coding-plan/GLM-5.3"`，配套一个只含 `kind+options` 的最小 provider def；从 `.zcode\v2\config.json` 原样抄全量 provider 块会被 strict 的 models 校验**整份静默否决**，报错仍是「Model config is missing」，极难排查。
+- **Electron 的无障碍树平时是空的**（只有窗口按钮），一次真实交互后整个激活（155 个元素全语义可见）——所以 GUI 路实际比预想能用：先一次坐标点击唤醒，之后连侧栏条目都能按元素点。但往输入框 set-value 会被 React 状态无视，得走「点击聚焦 + 窗口级键盘」。
+- exec 目录是懒建的：CLI 会话和纯对话会话都不占 `exec\sess_*`，跑过 Bash 才有；判会话出生要看 db.sqlite 和 rollout，别只盯 exec。
+
+## 三条路各干什么用
+
+- **要并行分身、结果回到我手里** → CLI 是最优解：`--prompt` 出生、stdout 收结果、`--resume` 迭代驱动，全程无 GUI、无焦点扰动。它不进左侧栏——按你的用途这反而是优点（不往人的作业面上堆东西）。
+- **要人看得见、到点自动跑** → CronCreate：宿主自己执行、左侧栏定时任务分组一等公民，这是唯一「官方认证」的 agent 侧开会话通道。
+- **要立刻出现在普通会话列表里** → 目前只有 GUI 路一条道（今天已验证到底）。GUI 路的纪律：干完活把视图切回去（我已切回你原来那条「gwb内核与插件仓库docfirst文档升级」）。
+
+## 我在你机器上留下的改动（要知情的）
+
+`~\.zcode\cli\config.json` 现在是**可用状态**：`hooks`（原样保留）+ `model.main` 字符串引用 + 最小 provider def（内含从 v2 配置复制的 apiKey，本机同用户）。想还原成实验前的空配置，写回 `{"hooks":{"events":{}}}` 即可；原始备份在 `out\zcode-cli-config-backup.json`（out\ 会被清，记得的话自己挪）。侧栏多出的「会话出生实验（GUI 面）」和已完成的定时任务记录是实验产物，留着或删随你；带密钥的临时拷贝我已从 out\ 删掉。
+
+**给 ZCode 官方的两个天然需求**（如果你想提）：`zcode://` 补一条会话路由；CLI 会话可选呈现在桌面端侧栏。这两个任一落地，GUI 自动化就可以退役。
+
+这份实验记录要不要落一份到 `docs-god-flow/drafts/`（跨单元、未定落点，正符合它的收件范围）？你说一声我就写。
+
+## user
+会话出生实验（定时探针）：请只回复两个字：收到。不要使用任何工具，不要做任何其他事。
+
+## assistant
+收到
+

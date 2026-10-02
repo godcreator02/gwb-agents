@@ -1,0 +1,49 @@
+{
+  "name": "@godcreator/gwb-zcode",
+  "version": "0.1.0",
+  "description": "给运行中的 ZCode 桌面端派任务：新建会话或在已有会话里接着发指令，一律切到完全访问，任务出现在 ZCode 侧栏里，等它做完把回答交回。命令 2 条；skill 1 份。",
+  "type": "module",
+  "exports": {
+    ".": "./dist/index.js"
+  },
+  "files": [
+    "dist",
+    "skills"
+  ],
+  "keywords": [
+    "gwb-plugin"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "https://git.tianshen02.online:28377/godcreator/gwb-zcode.git"
+  },
+  "publishConfig": {
+    "registry": "https://git.tianshen02.online:28377/api/packages/godcreator/npm/"
+  },
+  "scripts": {
+    "build": "node build.ts",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "lint": "oxlint . --deny-warnings",
+    "test": "vitest run --passWithNoTests",
+    "check": "pnpm run typecheck && pnpm run lint && pnpm run test"
+  },
+  "peerDependencies": {
+    "@godcreator/gwb-commands": "^0.6.0",
+    "@godcreator/gwb-kernel-desktop": "^0.10.1",
+    "@godcreator/gwb-skills": "^0.4.7"
+  },
+  "peerDependenciesMeta": {
+    "@godcreator/gwb-skills": {
+      "optional": true
+    }
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.0",
+    "cordis": "4.0.0-rc.10",
+    "esbuild": "^0.28.2",
+    "oxlint": "1.76.0",
+    "oxlint-tsgolint": "7.0.2001",
+    "typescript": "^7.0.2",
+    "vitest": "^4.1.10"
+  }
+}

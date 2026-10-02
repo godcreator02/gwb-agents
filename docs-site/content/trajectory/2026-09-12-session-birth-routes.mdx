@@ -1,0 +1,25 @@
+---
+born-at: 2026-10-02T17:48
+type: evidence
+parent: [2026-10-02-gwb-zcode]
+label: 开会话五条路
+domain: gwb 工具插件
+---
+
+## 背景
+
+用户在 ZCode 里问：「zcode能不能操纵自己在左侧栏开一个新会话？而不是必须人手工点呢？」接着要求：「先尝试下comouteruse和gui之外的路，最后试这俩，做完整实验吧」。
+实验由 ZCode 自己的 agent 在那条会话里做完，本卡在 2026-10-02 建仓时补记。
+
+## 依据
+
+`probes/2609121021_session-birth-routes/runs/01-session-transcript.txt` 是那条会话的对话原文（从 ZCode 会话库只读导出），
+`runs/02-automation-row.json` 是它用 `CronCreate` 建的一次性自动化与运行记录：`run_count` 1、`outcome` succeeded，执行出的会话就是发起实验的那一条。
+
+## 结论与边界
+
+五条路里能开出会话的三条：ZCode 安装包自带的 CLI（`resources/glm/zcode.cjs --prompt`）能开、能 `--resume`，但会话不进侧栏；
+ZCode agent 的 `CronCreate` 定时自动化由桌面端执行、进侧栏的「定时任务」分组；computer-use 点「新建任务」再键盘输入也行。
+`zcode://` 深链接只有 `oauth/callback`、`payment/callback`、`workspace/open` 三条路由，当时 ZCode 也没有监听任何 TCP 端口，这两条走不通。
+
+当时没找到用代码直接建一条普通会话、又能进侧栏的办法。CLI 那条路要在 `~/.zcode/cli/config.json` 里补模型配置才跑得起来，实验改了这个文件。

@@ -1,0 +1,26 @@
+{
+  "sessionId": "sess_c286a178-7cda-4898-8dfe-cc6866f1d6f8",
+  "traceId": "37003192-409a-407b-be8b-ac15a459b5bf",
+  "turnId": "turn_2d8b01d3-40be-4143-addb-d8fa086c8d42",
+  "response": "`vscode-workspace/` 目录下共有 **8 个** `.code-workspace` 文件（dev、plecs、样机设计、混合型MMC、笔记系统、论文迁移试点、C2000控制实验、立创对比），全部为普通文件，未做任何修改。",
+  "usage": {
+    "source": "provider",
+    "modelRequestCount": 3,
+    "inputTokens": 81172,
+    "outputTokens": 935,
+    "totalTokens": 82107,
+    "cacheReadTokens": 54272,
+    "cacheWriteTokens": 0,
+    "reasoningTokens": 0,
+    "webFetchRequests": 0,
+    "webSearchRequests": 0
+  },
+  "eventCount": 748,
+  "projection": {
+    "status": "idle",
+    "turnCount": 1,
+    "totalTokenCount": 82107,
+    "contextUsed": 27621,
+    "contextWindow": 200000
+  }
+}

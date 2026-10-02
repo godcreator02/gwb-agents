@@ -1,0 +1,125 @@
+---
+title: gwb-zcode
+description: 让 agent 经 gwb 工作台给运行中的 ZCode 桌面端派任务：新建会话或在已有会话里接着发指令，一律完全访问，会话出现在 ZCode 侧栏里。本页按接缝讲插件怎么一路连到 ZCode 的任务服务
+---
+
+**本页回答**：这个插件做什么、它和 agent、ZCode 桌面端之间的每条接缝传什么、由谁负责、怎么测，以及它刻意不做什么。
+
+ZCode 是本机装的另一个 AI 编程客户端（Electron 桌面端，模型走用户的 GLM 套餐）。把批量的活派给它，能省下派活一方自己的模型额度。
+ZCode 没有给外部用的建任务入口：深链接只能打开工作区，本机也没有它的接口端口；能让任务出现在侧栏里、人看得见的，只有它客户端窗口里
+自己的任务服务 `zcodeTaskService`。所以这个插件打开 ZCode 主进程的 Node 调试端口，在窗口里执行脚本调这个服务——
+这条路怎么找到的、为什么不用 CLI 无界面或定时自动化，见轨迹区。
+
+插件只有一个包 `@godcreator/gwb-zcode`（`plugins/zcode/`，入口 `src/index.ts`），两条命令：`zcode.create` 新建会话发任务，
+`zcode.send` 在已有会话里接着发。都先把会话切到「完全访问」，等这一轮做完才把回答交回。
+
+## 接缝图
+
+<ZcodeSeams />
+
+## 接缝逐条
+
+### 1 agent → 插件
+
+agent 经 MCP 入口 `run` 调两条命令，参数形状写在登记时的 `usage` 里。参数只在这一层校验，认不出的键直接报错——比如多给一个
+`mode` 不会被悄悄忽略，权限只有完全访问一种：
+
+{/* ref file="../plugins/zcode/src/args.ts" lines="21-28" hash="a79674b46996" blob="601ee5a11cce" */}
+
+`workspace` 要是已存在目录的绝对路径，这一条在登记命令的地方查（它要读磁盘）：
+
+{/* ref file="../plugins/zcode/src/index.ts" lines="19-21" hash="a3bef6297dfa" blob="aacae79c0995" */}
+
+两条命令都等这一轮做完才返回，缺省最多等 1800 秒；到点先交回 `timedOut: true`，ZCode 那边的任务不取消。
+测试：`tests/args.test.ts`。
+
+### 2 插件 → 进程表
+
+调试端口要开在 ZCode 主进程上，先找到它的 pid。ZCode 一开就是十几个 `ZCode.exe`（渲染进程、GPU 进程、每个会话一个 `zcode.cjs app-server`），
+主进程是命令行里没有 `--type=`、`zcode.cjs`、`windows-helper` 的那一个。剩下不是恰好一个就报错，不猜：
+
+{/* ref file="../plugins/zcode/src/desktop.ts" lines="15-17" hash="fcb66fbc34fb" blob="1cb48af3256e" */}
+
+没有自动测试：要真的开着 ZCode。在隔离 home 里调命令验证。
+
+### 3 插件 → 主进程（调试端口）
+
+ZCode 主进程是 Electron 里的 Node。9229 端口没开时，`process._debugProcess(pid)` 让它在不重启的情况下打开调试端口；开了以后经 WebSocket 发
+`Runtime.evaluate`。只有自己打开的端口，结束时才关掉——端口原来就开着（比如有人在调试 ZCode）就不动它：
+
+{/* ref file="../plugins/zcode/src/desktop.ts" lines="59-78" hash="8ff492e0d767" blob="1cb48af3256e" */}
+
+连上后先核对端口确实属于刚才找到的那个 pid，别的程序占着 9229 就报错：
+
+{/* ref file="../plugins/zcode/src/desktop.ts" lines="136-138" hash="444caa77a869" blob="1cb48af3256e" */}
+
+**几条命令同时跑时共用一个连接**，最后一条结束才关端口。各自开关的话，先结束的那条会把别人正在用的端口关掉；关端口在 ZCode 那边是
+200 毫秒后才真正生效，正在关的时候来了新命令，要等它关完再重新打开：
+
+{/* ref file="../plugins/zcode/src/desktop.ts" lines="154-189" hash="a547ee8149b8" blob="1cb48af3256e" */}
+
+关端口失败只写一行告警日志、不让命令报错：那时任务已经发出去了，报错会让调用方拿不到 `taskId`。没有自动测试。
+
+### 4 主进程 → 工作区窗口
+
+在主进程里取 Electron 的 `BrowserWindow`，按页面地址认出工作区窗口，必须恰好一个：
+
+{/* ref file="../plugins/zcode/src/desktop.ts" lines="117-123" hash="f922dac801c5" blob="1cb48af3256e" */}
+
+然后在那个窗口里 `executeJavaScript`，从 React 的根节点沿 fiber 树广度优先找到 `memoizedProps.services.zcodeTaskService`，调它的方法，
+返回值按 JSON 带回。**这一段完全依赖 ZCode 的内部结构**：React 树里服务挂在哪、服务叫什么，ZCode 升级都可能改，找不到时报错写明是这里：
+
+{/* ref file="../plugins/zcode/src/desktop.ts" lines="21-29" hash="167aa3755a0f" blob="1cb48af3256e" */}
+
+{/* ref file="../plugins/zcode/src/desktop.ts" lines="140-145" hash="f6bd2ab95adc" blob="1cb48af3256e" */}
+
+### 5 窗口 → 会话
+
+用到任务服务的四个方法。`createTask` 必须带 `v4Create: true`，否则走旧的创建流程，发指令时报数据库关联错误：
+
+{/* ref file="../plugins/zcode/src/round.ts" lines="15-19" hash="4ff72505cf66" blob="8f93a8db32f0" */}
+
+每次发指令前，新建的与续上的会话都先 `setMode` 切到 `yolo`（界面上的「完全访问」），再读快照核对，没切成就报错、指令不发：
+
+{/* ref file="../plugins/zcode/src/round.ts" lines="21-28" hash="e68f57991b28" blob="8f93a8db32f0" */}
+
+发出以后每 2 秒读一次快照。**判断这一轮做完的难点**是刚发出时状态还停在上一轮的 `completed`，所以要等出现了这一轮的新回答、并且状态是结束类的；
+失败类状态没有回答也算结束；停在等人确认权限时也交回（完全访问下不该出现，出现了就是哪里不对）：
+
+{/* ref file="../plugins/zcode/src/task-progress.ts" lines="53-77" hash="a8c4afda4777" blob="987594f93400" */}
+
+快照来自 ZCode 内部接口，形状不对直接报错，不按缺省值往下跑。测试：`tests/task-progress.test.ts`，其中这条覆盖刚发出时的情形：
+
+{/* ref file="../plugins/zcode/tests/task-progress.test.ts" lines="14-18" hash="df2857de6e59" blob="063b93bf666e" */}
+
+### 6 插件 → 说明书插件
+
+局部注入 `gwbSkills`，登记包里的 `skills/` 目录（相对产物写作 `'../skills/'`，所以 `skills` 在 `package.json` 的 `files` 里）。
+说明书 `zcode` 告诉 agent 什么时候派活、任务说明怎么写、回执怎么读。缺了说明书插件，命令照常可用：
+
+{/* ref file="../plugins/zcode/src/index.ts" lines="71-74" hash="51e5202532dc" blob="aacae79c0995" */}
+
+## 对外能做什么
+
+`zcode.create` 在一个工作区里新建会话、发任务、等做完交回；`zcode.send` 在已有会话里接着发。逐条的参数与回执在[命令](/docs/commands)，
+peer 写法在[插件之间怎么连](/docs/wiring)。
+
+## 依赖谁
+
+| 依赖 | 用来做什么 | 缺了会怎样 |
+| --- | --- | --- |
+| 命令总线 `gwb-commands`（必需） | 登记两条命令 | 插件不加载 |
+| 说明书 `gwb-skills`（局部注入） | 登记说明书 `zcode` | 照常加载；agent 读不到说明书 |
+| 内核包 `gwb-kernel-desktop` | 接口类型 | — |
+| ZCode 桌面端（本机安装、开着） | 一切：建会话、切模式、发指令、读快照 | 命令报「应有一个 ZCode 主进程」 |
+| `pwsh` | 列进程找 ZCode 主进程 | 命令报「找 ZCode 主进程失败」 |
+
+## 不做的事
+
+- **不提供别的权限模式**：一律完全访问，没有模式参数（轨迹卡[「一律完全访问」](/trajectory/2026-10-02-full-access-only)）
+- **没有单独读进度的命令**：要看进度就 `zcode.send` 问一句（轨迹卡[「两条命令进插件」](/trajectory/2026-10-02-two-commands-as-plugin)）
+- **不用 ZCode 的 CLI 无界面模式**：会话不进侧栏，人看不见（轨迹卡[「要侧栏可见」](/trajectory/2026-10-02-desktop-visible-over-cli)）
+- **不借定时自动化派任务**（轨迹卡[「不借定时任务」](/trajectory/2026-10-02-no-automation-detour)）
+- **不支持多个 ZCode 实例或多个工作区窗口**：遇到就报错，不替调用方挑
+- **不启动 ZCode**：没开就报错，由人打开
+- **不取消任务**：超时只是先交回，任务在 ZCode 里接着跑

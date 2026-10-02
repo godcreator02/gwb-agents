@@ -1,0 +1,23 @@
+---
+born-at: 2026-10-02T17:48
+type: choice
+parent: [2026-10-02-gwb-zcode]
+label: 一律完全访问
+domain: gwb 工具插件
+---
+
+## 背景
+
+用户说：「发过去的权限必须是完全访问，不能是其他的」。在这之前派出去的会话在侧栏索引里都是 `build`，执行状态 `{"mode":"build","planEnabled":true}`；
+`build` 在界面上叫「变更前确认」，改文件前会停下等人点。给 `createTask` 传 `mode` 不起作用。
+
+## 依据
+
+`probes/2610021715_desktop-dispatch-full-access/`：`runs/05-mode-labels.txt` 是界面文案表，`mode.label.glm.yolo` 是「完全访问」、`mode.label.glm.build` 是「变更前确认」；
+`runs/06-set-mode.txt` 是客户端任务服务的 `setMode`，ZCode 自己的机器人功能也用它把会话强制切到 yolo。发指令前调 `setMode` 切到 `yolo` 后，
+新会话写文件没有停下等确认（`runs/02`），原来跑在 `build` 下的旧会话续问也切成了 `yolo`（`runs/03`），侧栏索引里两条都是 `yolo`（`runs/04`）。
+
+## 结论与边界
+
+每次发指令前（新建的会话与续上的会话都是）先 `setMode` 切到 `yolo`，再读快照核对 `meta.mode`，不是 `yolo` 就报错、指令不发。不提供选模式的参数。
+完全访问意味着 ZCode 可以不经确认改文件、运行命令，派任务的一方要在任务说明里写清范围。

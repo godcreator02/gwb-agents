@@ -1,0 +1,24 @@
+---
+born-at: 2026-10-02T17:48
+type: choice
+parent: [2026-10-02-gwb-zcode]
+label: 要侧栏可见
+domain: gwb 工具插件
+---
+
+## 背景
+
+2026-10-02 在总控台重新试 CLI 无界面：直接用 node 运行 `zcode.cjs -p` 报 `无法定位 CLI ZCode Built-in Provider Config`，设环境变量
+`ZCODE_BUILTIN_PROVIDER_CONFIG_FILE` 指向安装包的 `resources/config/provider/zcode-builtin.json` 后 17 秒跑完、回答正确；会话进了共用的会话库，
+却不在桌面端侧栏的索引里。把两条路摆给用户、建议默认用 CLI 时，用户说：「就要走桌面端能看到的模式，cli无界面的话我看不见吧」，又补了一句「而且你不是成功有几个任务派发过去了吗」。
+
+## 依据
+
+`probes/2610021710_cli-headless/runs/03-index-check.txt`：会话在 `~/.zcode/cli/db/db.sqlite` 里有，`~/.zcode/v2/tasks-index.sqlite` 里没有（`inSidebarIndex` 为 null）。
+
+pivots-from:: [调客户端任务服务](2026-09-29-desktop-task-service.md)
+
+## 结论与边界
+
+派任务只走桌面端客户端的任务服务，不用 CLI 无界面。判据是用户要在 ZCode 界面上看着它干、能接着聊；CLI 公开参数更稳、能随便并行，这两点为此放弃。
+代价是只能在 ZCode 桌面端开着、只有一个工作区窗口时用，ZCode 升级可能让它失效。

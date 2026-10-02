@@ -1,0 +1,21 @@
+---
+born-at: 2026-10-02T19:46
+type: evidence
+parent: [2026-10-02-gwb-zcode]
+label: 归档不看目录
+domain: gwb 工具插件
+---
+
+## 背景
+
+用户说：「所有会话全部归档」。侧栏里未归档的 18 条中有 8 条的工作区目录已经删了，`zcode.archive` 0.2.1 跟别的命令一样要求目录存在，拒绝了它们。
+
+## 依据
+
+`probes/2610021945_archive-missing-workspace/runs/01-missing-workspace.txt`：目录删了的会话照样能读快照、`archiveTask` 照样成功，侧栏索引 `archived` 变成 1。
+
+pivots-from:: [加归档](2026-10-02-archive-sessions.md)
+
+## 结论与边界
+
+工作区路径对归档只是 ZCode 记会话用的键，`zcode.archive` 从 0.2.2 起不再查目录在不在，只要求是绝对路径。`create` / `send` 照旧要求目录存在，它们要让 ZCode 在那个目录里干活；`status` 这次没动，也还要求目录存在。

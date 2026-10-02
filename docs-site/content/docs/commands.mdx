@@ -60,7 +60,8 @@ description: zcode.create、zcode.send、zcode.status、zcode.archive 的参数�
 
 ## zcode.archive
 
-把一个会话从 ZCode 侧栏的会话列表里收起来，记录不删，在 ZCode 的已归档列表里还看得到。参数 `workspace`、`task` 同 `zcode.send`。
+把一个会话从 ZCode 侧栏的会话列表里收起来，记录不删，在 ZCode 的已归档列表里还看得到。参数 `workspace`、`task` 同 `zcode.send`，
+只是 `workspace` 那个目录已经删了也行：它只是 ZCode 记会话用的键，归档不在目录里干活。
 
 {/* ref file="../plugins/zcode/src/args.ts" lines="68-75" hash="4ac2a0ca4267" blob="c74bcdf352b0" */}
 

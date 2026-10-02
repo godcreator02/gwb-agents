@@ -1,0 +1,17 @@
+# 2026-10-02 19:44 侧栏索引里未归档、未删除的会话：18 条，没有在跑的；其中 8 条的工作区目录已经不存在
+# （d2xpp-gwb-runtime-lab 下 6 条、26090520ntn\console 1 条、opook-block-notebook 1 条）
+# 目录还在的 10 条用 zcode.archive 0.2.1 逐条归档，全部 ok
+
+# 目录没了的一条，直接调 archiveTask（../2610021925_archive-task/archive-probe.mjs）
+node archive-probe.mjs sess_25133f36-2a58-4ba8-98ad-019d19a50cad D:\unitfolders\opook-block-notebook
+archiveTask returned {"keys":["taskId","traceId","title","titleOverridden","workspacePath","createdAt","updatedAt","mode","model","thoughtLevel","provider","status","target"],"status":"completed","title":"查看进度与完整Spec指引"}
+{"task_id":"sess_25133f36-2a58-4ba8-98ad-019d19a50cad","archived":1}
+9229 已关闭
+
+# 目录没了的另一条，读快照（../2610021800_mode-and-round-signals/snapshot-meta.mjs）
+node snapshot-meta.mjs sess_e8d1862e-4c1d-4a4d-807a-d25b9ae3dd9c D:\unitfolders\d2xpp-gwb-runtime-lab\lab\experiments
+"mode": "build", "status": "completed"（读得到）
+9229 已关闭
+
+# 改完以后（不查目录在不在，0.2.3-dev.20261002193946，隔离 home zcode-archive2-2610021939）
+19:39 zcode.archive sess_6ce4709c-8180-4a74-971a-a9c31da478c4（工作区 D:\unitfolders\26090520ntn\console 已删）：ok true {"title":"重新安装 DeepSeek Harness 指南","archived":true}

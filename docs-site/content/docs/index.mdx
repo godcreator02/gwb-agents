@@ -27,7 +27,7 @@ agent 经 MCP 入口 `run` 调四条命令，参数形状写在登记时的 `usa
 
 {/* ref file="../plugins/zcode/src/args.ts" lines="27-34" hash="a79674b46996" blob="9c9c6bdf9e1f" */}
 
-`workspace` 要是已存在目录的绝对路径，这一条在登记命令的地方查（它要读磁盘）：
+`workspace` 要是已存在目录的绝对路径，这一条在登记命令的地方查（它要读磁盘）；`zcode.archive` 不查目录在不在，目录删了的旧会话也要能收起来：
 
 {/* ref file="../plugins/zcode/src/index.ts" lines="19-21" hash="a3bef6297dfa" blob="5ec367b6c96e" */}
 
@@ -121,7 +121,7 @@ ZCode 主进程是 Electron 里的 Node。9229 端口没开时，`process._debug
 局部注入 `gwbSkills`，登记包里的 `skills/` 目录（相对产物写作 `'../skills/'`，所以 `skills` 在 `package.json` 的 `files` 里）。
 说明书 `zcode` 告诉 agent 什么时候派活、任务说明怎么写、怎么轮询、回执怎么读。缺了说明书插件，命令照常可用：
 
-{/* ref file="../plugins/zcode/src/index.ts" lines="109-111" hash="8a9dbe7a78c3" blob="5ec367b6c96e" */}
+{/* ref file="../plugins/zcode/src/index.ts" lines="110-112" hash="8a9dbe7a78c3" blob="3502d054f6e8" */}
 
 ## 对外能做什么
 

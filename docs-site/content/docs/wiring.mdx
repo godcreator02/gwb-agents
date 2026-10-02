@@ -38,10 +38,15 @@ description: gwb-zcode 提供的命令与说明书，注入的服务与 peer 写
 | 进程命令行 | ZCode 主进程 | 不含 `--type=`、`zcode.cjs`、`windows-helper` 的 `ZCode.exe` | 认出主进程 |
 | 本机端口 | ZCode 主进程 | `127.0.0.1:9229`，Node 调试协议 | 在主进程里执行脚本 |
 | 页面地址 | ZCode 工作区窗口 | 地址含 `/out/renderer/index.html` | 认出工作区窗口 |
-| React 树 | ZCode 工作区窗口 | `memoizedProps.services.zcodeTaskService` | 拿到客户端的任务服务 |
+| React 树 | ZCode 工作区窗口 | `memoizedProps.services.zcodeTaskService` / `zcodeAgentService` | 拿到客户端的任务服务与代理服务 |
 | 服务方法 | `zcodeTaskService` | `createTask`、`setMode`、`sendPrompt`、`getTaskSnapshot` | 建会话、切模式、发指令、读快照 |
-| 模式值 | `zcodeTaskService` | `yolo` | 界面上的「完全访问」 |
+| 服务方法 | `zcodeAgentService` | `readSession` | 读代理进程实际用的模式 |
+| 快照字段 | `getTaskSnapshot` | `meta.mode`、`meta.status`、消息的 `durationMs` | 显示的模式、任务状态、一条回答写完没有 |
+| 会话字段 | `readSession` | `settings.mode.current` | 代理实际用的模式（`session.mode` 可能是旧值） |
+| 模式值 | 两个服务 | `yolo`、`build` | 界面上的「完全访问」「变更前确认」 |
 
 {/* ref file="../plugins/zcode/src/desktop.ts" lines="11-12" hash="e49b60617c05" blob="1cb48af3256e" */}
+
+{/* ref file="../plugins/zcode/src/desktop.ts" lines="21-22" hash="91e6ab54af71" blob="2a7faa4a7dd6" */}
 
 {/* ref file="../plugins/zcode/src/task-progress.ts" lines="3-4" hash="a4db8864185b" blob="987594f93400" */}

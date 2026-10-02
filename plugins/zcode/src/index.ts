@@ -40,10 +40,10 @@ export function apply(ctx: GwbContext): void {
     async (raw) => {
       const { workspace, prompt, timeoutSeconds } = parseCreateArgs(raw)
       requireExistingDirectory('zcode.create', workspace)
-      return withDesktop(warn, async (taskService) => {
-        const taskId = await createTask(taskService, workspace)
+      return withDesktop(warn, async (services) => {
+        const taskId = await createTask(services, workspace)
         log.info(`在 ${workspace} 新建会话 ${taskId}`)
-        return { ok: true, data: await sendRoundAndWait(taskService, { workspace, taskId, prompt, timeoutSeconds }) }
+        return { ok: true, data: await sendRoundAndWait(services, { workspace, taskId, prompt, timeoutSeconds }) }
       })
     },
   )
@@ -61,9 +61,9 @@ export function apply(ctx: GwbContext): void {
     async (raw) => {
       const { workspace, task, prompt, timeoutSeconds } = parseSendArgs(raw)
       requireExistingDirectory('zcode.send', workspace)
-      return withDesktop(warn, async (taskService) => {
+      return withDesktop(warn, async (services) => {
         log.info(`往会话 ${task} 发指令`)
-        return { ok: true, data: await sendRoundAndWait(taskService, { workspace, taskId: task, prompt, timeoutSeconds }) }
+        return { ok: true, data: await sendRoundAndWait(services, { workspace, taskId: task, prompt, timeoutSeconds }) }
       })
     },
   )

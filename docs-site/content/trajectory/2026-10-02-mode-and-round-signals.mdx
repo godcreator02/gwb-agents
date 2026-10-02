@@ -1,0 +1,30 @@
+---
+born-at: 2026-10-02T18:14
+type: evidence
+parent: [2026-10-02-gwb-zcode]
+label: 模式与收尾信号
+domain: gwb 工具插件
+---
+
+## 背景
+
+插件第一版装进隔离 home 后，`zcode.create` 切完全访问再读回快照，`meta.mode` 仍是 `build`，命令报错、指令没发；17:35 跑通过的总控台脚本此刻也一样失败，
+ZCode 没有升级、主进程也没重启。放过这一步后，又发现回执只交回了回答的开头一句。
+
+## 依据
+
+`probes/2610021800_mode-and-round-signals/`。`runs/03-agent-log-mode.txt`：17:35 那条会话的代理进程启动时是 `build`，`setMode` 后记了 `session.mode.updated` build→yolo；
+17:56 那条启动时已经是 `yolo`，没有这条事件。`runs/04`：代理的 `settings.mode.current` 是 `yolo`，`session.mode` 与任务 `meta.mode` 是 `build`。
+`runs/05`：先切 `build` 再切 `yolo` 后两处都是 `yolo`。`runs/06`：发出后 9.3 秒状态已是 `completed`、回答仍为空，10.2 秒回答写入并带上 `durationMs`。
+`runs/07`：改完以后三种会话状态、两条并发、超时都在隔离 home 里验过，侧栏索引里都是 `yolo`。
+
+pivots-from:: [一律完全访问](2026-10-02-full-access-only.md)
+
+## 结论与边界
+
+新会话的代理进程继承这个工作区上次用的模式，任务的 `meta.mode`（侧栏与界面显示的）只在代理的模式真的变了时更新，所以只看 `meta.mode` 会误判。
+插件改成：先读快照（让 ZCode 恢复会话），读代理的 `settings.mode.current`；代理不是 `yolo` 就切 `yolo`，代理已是 `yolo` 而显示不是，就先切 `build` 再切 `yolo` 让显示跟上，
+两处都是 `yolo` 才发指令。只在没跑过的新会话上才会先切 `build`：正在跑的一轮里切到 `build`，那一瞬间的工具调用会停下等确认。
+
+一轮做完的判据改成：出现了发出前没有的消息、状态是结束类的、这一轮的助手消息都带 `durationMs`；失败类状态在这一轮开始之后才算数。
+新建、还没发过指令的会话快照里没有 `status`，校验放宽为可选。

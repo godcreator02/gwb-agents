@@ -9,7 +9,7 @@ export const modules = [
   { id: 'skills', title: '说明书插件', lines: ['登记说明书 zcode'], x: 640, y: 20, w: 200, h: 72, color: '#e0e0e0' },
   { id: 'processes', title: 'Windows 进程表', lines: ['pwsh Get-CimInstance', '找唯一的 ZCode 主进程'], x: 20, y: 214, w: 200, h: 86, color: '#f6f5ae' },
   { id: 'main', title: 'ZCode 主进程', lines: ['Electron 的 Node', '调试端口 127.0.0.1:9229'], x: 300, y: 214, w: 260, h: 86, color: '#b2f7b1' },
-  { id: 'window', title: 'ZCode 工作区窗口', lines: ['渲染进程，React 树里的', 'services.zcodeTaskService'], x: 300, y: 380, w: 260, h: 86, color: '#ff9bd2' },
+  { id: 'window', title: 'ZCode 工作区窗口', lines: ['渲染进程，React 树里的', 'zcodeTaskService / zcodeAgentService'], x: 300, y: 380, w: 260, h: 86, color: '#ff9bd2' },
   { id: 'session', title: 'ZCode 会话', lines: ['按完全访问（yolo）干活', '出现在侧栏里'], x: 640, y: 380, w: 200, h: 86, color: '#ffb385' },
 ]
 
@@ -45,7 +45,7 @@ export const seams = [
     to: [430, 380],
     label: [450, 340],
     title: '主进程 → 工作区窗口',
-    text: '在主进程里取 Electron 的 BrowserWindow，必须恰好一个工作区窗口；在它里面 executeJavaScript，沿 React 树找到 zcodeTaskService 并调它的方法。',
+    text: '在主进程里取 Electron 的 BrowserWindow，必须恰好一个工作区窗口；在它里面 executeJavaScript，沿 React 树找到 zcodeTaskService 或 zcodeAgentService 并调它的方法。',
   },
   {
     n: 5,
@@ -53,7 +53,7 @@ export const seams = [
     to: [640, 423],
     label: [600, 411],
     title: '窗口 → 会话',
-    text: 'createTask（v4Create）建会话；setMode 切到 yolo 并读回核对；sendPrompt 发指令；每 2 秒 getTaskSnapshot，有了这一轮的新回答且状态结束才交回。',
+    text: 'createTask（v4Create）建会话；按代理的 settings.mode.current 与显示的 meta.mode 决定怎么 setMode，两处都是 yolo 才 sendPrompt；每 2 秒 getTaskSnapshot，这一轮的回答都写完（有 durationMs）且状态结束才交回。',
   },
   {
     n: 6,

@@ -1,0 +1,17 @@
+# 插件第一版在隔离 home zcode-2610021753 里的两次失败（devkit.cdp cmd 的回执原文）
+
+## 17:54 zcode.create：新建会话的快照没有 status
+Error: 会话 sess_c5c99127-267a-49b3-9791-3925bb5a204b 的快照形状不对（meta 缺 status 或 mode），ZCode 内部接口可能变了
+
+## 17:55 zcode.send（放宽 status 之后）：setMode 之后读回的 meta.mode 仍是 build
+Error: 会话 sess_c5c99127-267a-49b3-9791-3925bb5a204b 切换到完全访问（yolo）后读回的模式是 build，已停止，指令没有发出
+
+## 17:56 zcode.create：新会话同样
+Error: 会话 sess_d9afb1fd-24b7-4851-9bf0-81c7aa003cb5 切换到完全访问（yolo）后读回的模式是 build，已停止，指令没有发出
+
+## 17:56 对照：总控台仓 tools/zcode/zcode-desktop.mjs（17:35 跑通过的同一份逻辑）现在也失败
+Error: 会话 sess_95a6961d-5f10-457e-8aea-be80a6171278 切换到完全访问（yolo）后读回的模式是 build，已停止，任务没有发出
+
+## 新建会话的快照 meta（snapshot-meta.mjs sess_c5c99127…）：没有 status 字段
+metaKeys: taskId, traceId, title, titleOverridden, workspacePath, createdAt, updatedAt, mode, model, thoughtLevel, provider, target
+meta.mode: build，messageCount: 0

@@ -1,0 +1,21 @@
+# 插件最终版（0.1.1-dev.20261002181021 及之前一版）在隔离 home 里的验收，devkit.cdp cmd 回执摘要
+
+18:10 zcode.create（新会话：代理继承 yolo、显示 build → 先 build 再 yolo）
+  ok: true, taskId sess_e61bd108-6618-40d6-88a9-7a5bd152eb8c, status completed, mode yolo, replies ["收到"], 15.9 秒
+18:10 zcode.send sess_eb252fe5…（真是 build、早就不在活动的旧会话 → 直接切 yolo）
+  ok: true, status completed, mode yolo, replies ["收到"], 14.8 秒
+18:11 zcode.send sess_099faf62…（已经是 yolo → 不切）
+  ok: true, status completed, mode yolo, replies 记得上一轮列出的 8 个文件, 13.7 秒
+
+更早一版（判据已改成看 durationMs）：
+18:02 zcode.send sess_c5c99127…：在临时目录写 plugin-probe.txt，ok: true, mode yolo，文件内容 ok，27 秒
+18:06 zcode.create sess_099faf62…：先列目录再读 dev.code-workspace，回答完整（第一版判据只交回了开头一句），49.5 秒
+18:07 zcode.send sess_c5c99127…：问上一轮暗号，答「白泽」与 plugin-probe.txt
+18:09 两条 zcode.send 同时发（node <devkit>/bin/cdp.mjs 两个后台作业，间隔 0.3 秒）：都 ok: true，共 16 秒；之后 9229 已关闭
+18:09 zcode.send timeoutSeconds 2：4.9 秒交回 status running、timedOut true，任务在 ZCode 里继续跑；下一轮问起它答得出那一轮列的文件
+
+侧栏索引（../2610021715_desktop-dispatch-full-access/check-sessions.mjs）：
+{"sessionId":"sess_e61bd108-6618-40d6-88a9-7a5bd152eb8c","inSidebarIndex":{"title":"gwb-zcode 插件验收测试任务","task_status":"completed","mode":"yolo"},"executionState":"{\"mode\":\"yolo\",\"planEnabled\":false}"}
+{"sessionId":"sess_eb252fe5-204c-4775-8811-e6cc06d6b865","inSidebarIndex":{"title":"统计 vscode-workspace 目录下 .code-workspace 文件","task_status":"completed","mode":"yolo"},"executionState":"{\"mode\":\"yolo\",\"planEnabled\":false}"}
+{"sessionId":"sess_099faf62-ba2c-4ee3-ba4e-486695094fde","inSidebarIndex":{"title":"检查 dev.code-workspace 的 folders 配置","task_status":"completed","mode":"yolo"},"executionState":"{\"mode\":\"yolo\",\"planEnabled\":false}"}
+{"sessionId":"sess_c5c99127-267a-49b3-9791-3925bb5a204b","inSidebarIndex":{"title":"gwb-zcode 插件验收测试任务","task_status":"completed","mode":"yolo"},"executionState":"{\"mode\":\"yolo\",\"planEnabled\":false}"}

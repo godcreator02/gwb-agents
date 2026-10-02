@@ -1,0 +1,7 @@
+##### sess_6ad63254
+2026-10-02T09:35:02.664Z zcode_protocol.session_create.started {"persistence":"deferred"}
+2026-10-02T09:35:02.960Z bootstrap.app.startup.runtime_config.completed {"mode":"build"}
+2026-10-02T09:35:03.239Z session.mode.updated {"mode":"yolo","previousMode":"build"}
+##### sess_95a6961d
+2026-10-02T09:56:56.122Z zcode_protocol.session_create.started {"persistence":"deferred"}
+2026-10-02T09:56:56.424Z bootstrap.app.startup.runtime_config.completed {"mode":"yolo"}

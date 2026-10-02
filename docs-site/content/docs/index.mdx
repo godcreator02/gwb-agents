@@ -47,16 +47,16 @@ agent 经 MCP 入口 `run` 调两条命令，参数形状写在登记时的 `usa
 ZCode 主进程是 Electron 里的 Node。9229 端口没开时，`process._debugProcess(pid)` 让它在不重启的情况下打开调试端口；开了以后经 WebSocket 发
 `Runtime.evaluate`。只有自己打开的端口，结束时才关掉——端口原来就开着（比如有人在调试 ZCode）就不动它：
 
-{/* ref file="../plugins/zcode/src/desktop.ts" lines="59-78" hash="8ff492e0d767" blob="1cb48af3256e" */}
+{/* ref file="../plugins/zcode/src/desktop.ts" lines="64-83" hash="8ff492e0d767" blob="2a7faa4a7dd6" */}
 
 连上后先核对端口确实属于刚才找到的那个 pid，别的程序占着 9229 就报错：
 
-{/* ref file="../plugins/zcode/src/desktop.ts" lines="136-138" hash="444caa77a869" blob="1cb48af3256e" */}
+{/* ref file="../plugins/zcode/src/desktop.ts" lines="141-143" hash="444caa77a869" blob="2a7faa4a7dd6" */}
 
 **几条命令同时跑时共用一个连接**，最后一条结束才关端口。各自开关的话，先结束的那条会把别人正在用的端口关掉；关端口在 ZCode 那边是
 200 毫秒后才真正生效，正在关的时候来了新命令，要等它关完再重新打开：
 
-{/* ref file="../plugins/zcode/src/desktop.ts" lines="154-189" hash="a547ee8149b8" blob="1cb48af3256e" */}
+{/* ref file="../plugins/zcode/src/desktop.ts" lines="159-194" hash="97e43b6351a5" blob="2a7faa4a7dd6" */}
 
 关端口失败只写一行告警日志、不让命令报错：那时任务已经发出去了，报错会让调用方拿不到 `taskId`。没有自动测试。
 
@@ -64,33 +64,40 @@ ZCode 主进程是 Electron 里的 Node。9229 端口没开时，`process._debug
 
 在主进程里取 Electron 的 `BrowserWindow`，按页面地址认出工作区窗口，必须恰好一个：
 
-{/* ref file="../plugins/zcode/src/desktop.ts" lines="117-123" hash="f922dac801c5" blob="1cb48af3256e" */}
+{/* ref file="../plugins/zcode/src/desktop.ts" lines="122-128" hash="f922dac801c5" blob="2a7faa4a7dd6" */}
 
-然后在那个窗口里 `executeJavaScript`，从 React 的根节点沿 fiber 树广度优先找到 `memoizedProps.services.zcodeTaskService`，调它的方法，
-返回值按 JSON 带回。**这一段完全依赖 ZCode 的内部结构**：React 树里服务挂在哪、服务叫什么，ZCode 升级都可能改，找不到时报错写明是这里：
+然后在那个窗口里 `executeJavaScript`，从 React 的根节点沿 fiber 树广度优先找到 `memoizedProps.services` 下的服务，调它的方法，
+返回值按 JSON 带回。用到两个服务：`zcodeTaskService` 管任务（侧栏里的一条），`zcodeAgentService` 管会话背后的代理进程。
+**这一段完全依赖 ZCode 的内部结构**：React 树里服务挂在哪、服务叫什么，ZCode 升级都可能改，找不到时报错写明是这里：
 
-{/* ref file="../plugins/zcode/src/desktop.ts" lines="21-29" hash="167aa3755a0f" blob="1cb48af3256e" */}
+{/* ref file="../plugins/zcode/src/desktop.ts" lines="21-34" hash="ff4a20feb223" blob="2a7faa4a7dd6" */}
 
-{/* ref file="../plugins/zcode/src/desktop.ts" lines="140-145" hash="f6bd2ab95adc" blob="1cb48af3256e" */}
+{/* ref file="../plugins/zcode/src/desktop.ts" lines="145-150" hash="55e9564919f5" blob="2a7faa4a7dd6" */}
 
 ### 5 窗口 → 会话
 
-用到任务服务的四个方法。`createTask` 必须带 `v4Create: true`，否则走旧的创建流程，发指令时报数据库关联错误：
+`createTask` 必须带 `v4Create: true`，否则走旧的创建流程，发指令时报数据库关联错误；给它传 `mode` 不起作用：
 
-{/* ref file="../plugins/zcode/src/round.ts" lines="15-19" hash="4ff72505cf66" blob="8f93a8db32f0" */}
+{/* ref file="../plugins/zcode/src/round.ts" lines="25-29" hash="329cae0cbfd0" blob="371da2295c91" */}
 
-每次发指令前，新建的与续上的会话都先 `setMode` 切到 `yolo`（界面上的「完全访问」），再读快照核对，没切成就报错、指令不发：
+**切完全访问要以代理进程为准。**新会话的代理进程继承这个工作区上次用的模式，而任务的 `meta.mode`（侧栏与界面显示的那个）只在代理的模式真的变了时才更新，
+所以继承到 `yolo` 的新会话 `meta.mode` 停在 `build`，再切 `yolo` 也改不动它。代理实际用的模式在 `zcodeAgentService.readSession` 的 `settings.mode.current`。
+每次发指令前按两处的读数决定怎么切，切完两处都是 `yolo` 才发：
 
-{/* ref file="../plugins/zcode/src/round.ts" lines="21-28" hash="e68f57991b28" blob="8f93a8db32f0" */}
+{/* ref file="../plugins/zcode/src/round.ts" lines="31-53" hash="dfc3e26f02ff" blob="371da2295c91" */}
 
-发出以后每 2 秒读一次快照。**判断这一轮做完的难点**是刚发出时状态还停在上一轮的 `completed`，所以要等出现了这一轮的新回答、并且状态是结束类的；
-失败类状态没有回答也算结束；停在等人确认权限时也交回（完全访问下不该出现，出现了就是哪里不对）：
+先切 `build` 再切 `yolo` 只发生在没跑过的新会话上：正在跑的一轮里切到 `build`，那一瞬间的工具调用会停下等确认。
+来历与实测见轨迹卡[「模式与收尾信号」](/trajectory/2026-10-02-mode-and-round-signals)。
 
-{/* ref file="../plugins/zcode/src/task-progress.ts" lines="53-77" hash="a8c4afda4777" blob="987594f93400" */}
+发出以后每 2 秒读一次快照。**判断这一轮做完的难点在于 `status` 落后于消息**：刚发出时还是上一轮的 `completed`，转成 `completed` 时回答可能还没写进快照，
+而一轮里的回答按同一个消息 id 越写越长、写完才带上 `durationMs`。所以三件事一起成立才算做完——出现了发出前没有的消息、状态是结束类的、这一轮的助手消息都有 `durationMs`；
+失败类状态在这一轮开始之后才算数；停在等人确认权限时也交回（完全访问下不该出现，出现了就是哪里不对）：
 
-快照来自 ZCode 内部接口，形状不对直接报错，不按缺省值往下跑。测试：`tests/task-progress.test.ts`，其中这条覆盖刚发出时的情形：
+{/* ref file="../plugins/zcode/src/task-progress.ts" lines="64-92" hash="9fa1b2555853" blob="96619d6601db" */}
 
-{/* ref file="../plugins/zcode/tests/task-progress.test.ts" lines="14-18" hash="df2857de6e59" blob="063b93bf666e" */}
+快照来自 ZCode 内部接口，形状不对直接报错，不按缺省值往下跑。测试：`tests/task-progress.test.ts`，按实测的顺序覆盖一轮里快照的几个阶段：
+
+{/* ref file="../plugins/zcode/tests/task-progress.test.ts" lines="16-37" hash="2c1c01071c80" blob="745ca7d2e429" */}
 
 ### 6 插件 → 说明书插件
 

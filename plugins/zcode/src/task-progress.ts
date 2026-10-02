@@ -10,10 +10,13 @@ export interface SnapshotMessage {
   id: string
   role: string
   content: string
+  /** 一轮里的回答按同一个 id 越写越长，写完这一条才有 durationMs */
+  durationMs?: number | null
 }
 
 export interface TaskSnapshot {
-  meta: { title: string; status: string; mode: string }
+  /** 新建、还没发过指令的会话没有 status */
+  meta: { title: string; status?: string; mode: string }
   messages: SnapshotMessage[]
   fileChanges: unknown
   runtime?: { pendingPermissions?: unknown[] }
@@ -22,7 +25,7 @@ export interface TaskSnapshot {
 export interface RoundOutcome {
   taskId: string
   title: string
-  status: string
+  status: string | null
   mode: string
   replies: string[]
   fileChanges: unknown
@@ -41,28 +44,40 @@ export function readSnapshot(raw: unknown, taskId: string): TaskSnapshot {
   }
   if (!isRecord(raw)) return fail('不是对象')
   const { meta, messages } = raw
-  if (!isRecord(meta) || typeof meta['status'] !== 'string' || typeof meta['mode'] !== 'string') return fail('meta 缺 status 或 mode')
+  if (!isRecord(meta) || typeof meta['mode'] !== 'string') return fail('meta 缺 mode')
+  if (meta['status'] !== undefined && typeof meta['status'] !== 'string') return fail('meta.status 不是字符串')
   if (!Array.isArray(messages)) return fail('messages 不是数组')
   return raw as unknown as TaskSnapshot
 }
 
-export function assistantMessageIds(snapshot: TaskSnapshot): Set<string> {
-  return new Set(snapshot.messages.filter((m) => m.role === 'assistant').map((m) => m.id))
+/** zcodeAgentService.readSession 的返回里，代理进程实际用的模式在 settings.mode.current */
+export function readAgentMode(raw: unknown, taskId: string): string {
+  const mode = isRecord(raw) && isRecord(raw['settings']) && isRecord(raw['settings']['mode']) ? raw['settings']['mode']['current'] : undefined
+  if (typeof mode !== 'string') throw new Error(`会话 ${taskId} 的代理设置里没有 settings.mode.current，ZCode 内部接口可能变了`)
+  return mode
+}
+
+export function messageIds(snapshot: TaskSnapshot): Set<string> {
+  return new Set(snapshot.messages.map((m) => m.id))
 }
 
 /**
- * 这一轮算结束的条件：状态是结束类的，并且已经有了这一轮的新回答（刚发出时状态还停在上一轮的 completed），
- * 或者状态是失败类的；另外停在等人确认权限时也交回，让调用方知道它卡住了
+ * 判断这一轮做完没有。status 会落后于消息：刚发出时还是上一轮的 completed，转成 completed 时回答可能还没写进快照，
+ * 所以只认三件事一起成立——这一轮已经开始（出现了发出前没有的消息）、状态是结束类的、这一轮的回答都写完了（有 durationMs）；
+ * 失败类状态在这一轮开始之后才算数。停在等人确认权限时也交回，让调用方知道它卡住了
  */
-export function judgeRound(snapshot: TaskSnapshot, taskId: string, assistantIdsBeforeSend: Set<string>): { roundIsOver: boolean; outcome: RoundOutcome } {
-  const replies = snapshot.messages
-    .filter((m) => m.role === 'assistant' && m.content !== '' && !assistantIdsBeforeSend.has(m.id))
-    .map((m) => m.content)
+export function judgeRound(snapshot: TaskSnapshot, taskId: string, messageIdsBeforeSend: Set<string>): { roundIsOver: boolean; outcome: RoundOutcome } {
+  const newMessages = snapshot.messages.filter((m) => !messageIdsBeforeSend.has(m.id))
+  const newAssistantMessages = newMessages.filter((m) => m.role === 'assistant')
+  const replies = newAssistantMessages.filter((m) => m.content !== '').map((m) => m.content)
   const pendingPermissions = snapshot.runtime?.pendingPermissions ?? []
-  const status = snapshot.meta.status
-  const finished = FINISHED_STATUSES.includes(status) && (replies.length > 0 || FAILED_STATUSES.includes(status))
+  const status = snapshot.meta.status ?? null
+  const roundStarted = newMessages.length > 0
+  const repliesWritten = newAssistantMessages.length > 0 && newAssistantMessages.every((m) => typeof m.durationMs === 'number')
+  const succeeded = status !== null && FINISHED_STATUSES.includes(status) && repliesWritten
+  const failed = status !== null && FAILED_STATUSES.includes(status)
   return {
-    roundIsOver: finished || pendingPermissions.length > 0,
+    roundIsOver: (roundStarted && (succeeded || failed)) || pendingPermissions.length > 0,
     outcome: {
       taskId,
       title: snapshot.meta.title,

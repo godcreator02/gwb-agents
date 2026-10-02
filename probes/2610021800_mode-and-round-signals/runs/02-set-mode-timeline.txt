@@ -1,0 +1,27 @@
+# node set-mode-timeline.mjs sess_c5c99127-267a-49b3-9791-3925bb5a204b D:\unitfolders\00000-console\console
+before build
+setMode returned after 608ms: undefined
++608ms build
++1428ms build
++2270ms build
++3027ms build
++3811ms build
++4630ms build
++5427ms build
++6282ms build
++7057ms build
++7903ms build
++8733ms build
++9631ms build
++10555ms build
++11356ms build
++12289ms build
++13123ms build
++13987ms build
++14777ms build
++15608ms build
++16368ms build
+
+# node create-with-mode.mjs unused D:\unitfolders\00000-console\console（createTask 带 mode: 'yolo'）
+createTask returned {"taskId":"sess_be977358-97ff-456e-bc68-9afb1dda63bf","mode":"build"}
+snapshot meta.mode build

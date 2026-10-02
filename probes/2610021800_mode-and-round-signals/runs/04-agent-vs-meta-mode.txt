@@ -1,0 +1,5 @@
+# node agent-mode.mjs unused D:\unitfolders\00000-console\console <sessionId…>
+# zcodeAgentService.readSession：session.mode 与任务 meta 一样是 build，settings.mode.current 才是代理实际用的 yolo；没在活动的会话读不了
+95a6961d {"sessionKeys":["sessionId","workspace","traceId","sessionKind","title","mode","status","model","target","createdAt","updatedAt"],"mode":"build","settingsMode":{"current":"yolo"}}
+be977358 {"sessionKeys":["sessionId","workspace","traceId","sessionKind","title","mode","status","model","target","createdAt","updatedAt"],"mode":"build","settingsMode":{"current":"yolo"}}
+Error: Session is not active: sess_eb252fe5-204c-4775-8811-e6cc06d6b865

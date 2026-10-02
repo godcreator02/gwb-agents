@@ -1,0 +1,4 @@
+# node toggle-mode.mjs sess_be977358-97ff-456e-bc68-9afb1dda63bf D:\unitfolders\00000-console\console
+before meta.mode= build agent= yolo
+after build meta.mode= build agent= build
+after yolo meta.mode= yolo agent= yolo

@@ -3,7 +3,7 @@ import { promisify } from 'node:util'
 
 /**
  * 连到运行中的 ZCode 桌面端：给主进程打开 Node 调试端口 9229，经 Electron 在工作区窗口里执行脚本，
- * 调客户端自己的 zcodeTaskService。ZCode 没有给外部用的建任务入口，这是唯一能让任务进侧栏的办法，
+ * 调客户端自己的服务。ZCode 没有给外部用的建任务入口，这是唯一能让任务进侧栏的办法，
  * 依赖的 React 树结构与服务方法名都是 ZCode 内部的，升级后可能要改这里。
  */
 
@@ -18,21 +18,26 @@ const FIND_MAIN_PROCESS_SCRIPT =
 
 const ELECTRON_MODULE = 'process.getBuiltinModule("module").createRequire(process.execPath)("electron")'
 
-const FIND_TASK_SERVICE_IN_RENDERER = `(()=>{
+/** zcodeTaskService 管任务（侧栏里的一条），zcodeAgentService 管会话背后的代理进程 */
+export type DesktopServiceName = 'zcodeTaskService' | 'zcodeAgentService'
+
+function findServiceInRenderer(serviceName: DesktopServiceName): string {
+  return `(()=>{
   const root=document.getElementById('root');
   const containerKey=Object.keys(root).find(k=>k.startsWith('__reactContainer'));
   const start=root[containerKey], seen=new Set(), queue=[start,start?.stateNode?.current];
   while(queue.length){const fiber=queue.shift();if(!fiber||seen.has(fiber))continue;seen.add(fiber);
-    const service=fiber.memoizedProps?.services?.zcodeTaskService;if(service)return service;
+    const service=fiber.memoizedProps?.services?.${serviceName};if(service)return service;
     queue.push(fiber.child,fiber.sibling,fiber.alternate);}
-  throw new Error('窗口的 React 树里找不到 services.zcodeTaskService，ZCode 内部结构可能变了');
+  throw new Error('窗口的 React 树里找不到 services.${serviceName}，ZCode 内部结构可能变了');
 })()`
-
-export interface DesktopTaskService {
-  call(method: string, args: unknown): Promise<unknown>
 }
 
-interface OpenConnection extends DesktopTaskService {
+export interface DesktopServices {
+  call(service: DesktopServiceName, method: string, args: unknown): Promise<unknown>
+}
+
+interface OpenConnection extends DesktopServices {
   close(): Promise<void>
 }
 
@@ -137,10 +142,10 @@ async function openConnection(): Promise<OpenConnection> {
     const inspectedProcessId = await socket.evaluate('process.pid')
     if (inspectedProcessId !== processId) throw new Error(`${INSPECTOR_PORT} 端口属于 pid ${String(inspectedProcessId)}，不是 ZCode 主进程 ${processId}`)
     const windowId = await findWorkspaceWindowId(socket.evaluate)
-    const call = (method: string, args: unknown): Promise<unknown> =>
+    const call = (service: DesktopServiceName, method: string, args: unknown): Promise<unknown> =>
       socket.evaluate(
         `${ELECTRON_MODULE}.BrowserWindow.fromId(${windowId}).webContents.executeJavaScript(${JSON.stringify(
-          `${FIND_TASK_SERVICE_IN_RENDERER}[${JSON.stringify(method)}](${JSON.stringify(args)})`,
+          `${findServiceInRenderer(service)}[${JSON.stringify(method)}](${JSON.stringify(args)})`,
         )})`,
       )
     return { call, close }
@@ -160,7 +165,7 @@ let closingConnection: Promise<void> = Promise.resolve()
 
 export async function withDesktop<T>(
   warn: (message: string) => void,
-  work: (taskService: DesktopTaskService) => Promise<T>,
+  work: (services: DesktopServices) => Promise<T>,
 ): Promise<T> {
   await closingConnection
   if (sharedConnection === undefined) {

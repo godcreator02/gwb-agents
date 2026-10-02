@@ -1,17 +1,23 @@
 import path from 'node:path'
 
-/** 两条命令的参数校验：认不出的键直接报错，不静默忽略 */
+/** 三条命令的参数校验：认不出的键直接报错，不静默忽略 */
 
-export const DEFAULT_TIMEOUT_SECONDS = 1800
+/** MCP 客户端等一次调用有上限（Claude Code 是 300 秒没动静就放弃），zcode.status 的等待留出余量 */
+export const MAX_WAIT_SECONDS = 240
 
 export interface CreateArgs {
   workspace: string
   prompt: string
-  timeoutSeconds: number
 }
 
 export interface SendArgs extends CreateArgs {
   task: string
+}
+
+export interface StatusArgs {
+  workspace: string
+  task: string
+  waitSeconds: number
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -38,31 +44,37 @@ function workspacePath(commandName: string, value: unknown): string {
   return workspace
 }
 
-function timeoutSeconds(commandName: string, value: unknown): number {
-  if (value === undefined) return DEFAULT_TIMEOUT_SECONDS
-  if (typeof value !== 'number' || !Number.isFinite(value) || value <= 0) {
-    throw new Error(`${commandName} 的 timeoutSeconds 要是正数（秒），收到 ${JSON.stringify(value)}`)
-  }
-  return value
-}
+const TASK_MEANING = 'zcode.create 回执里的 taskId（sess_ 开头）'
 
 export function parseCreateArgs(raw: unknown): CreateArgs {
   const commandName = 'zcode.create'
-  const obj = objectArgs(commandName, raw, ['workspace', 'prompt', 'timeoutSeconds'])
+  const obj = objectArgs(commandName, raw, ['workspace', 'prompt'])
   return {
     workspace: workspacePath(commandName, obj['workspace']),
     prompt: requireNonEmptyString(commandName, 'prompt', obj['prompt'], '发给 ZCode 的任务说明'),
-    timeoutSeconds: timeoutSeconds(commandName, obj['timeoutSeconds']),
   }
 }
 
 export function parseSendArgs(raw: unknown): SendArgs {
   const commandName = 'zcode.send'
-  const obj = objectArgs(commandName, raw, ['workspace', 'task', 'prompt', 'timeoutSeconds'])
+  const obj = objectArgs(commandName, raw, ['workspace', 'task', 'prompt'])
   return {
     workspace: workspacePath(commandName, obj['workspace']),
-    task: requireNonEmptyString(commandName, 'task', obj['task'], 'zcode.create 回执里的 taskId（sess_ 开头）'),
+    task: requireNonEmptyString(commandName, 'task', obj['task'], TASK_MEANING),
     prompt: requireNonEmptyString(commandName, 'prompt', obj['prompt'], '发给 ZCode 的指令'),
-    timeoutSeconds: timeoutSeconds(commandName, obj['timeoutSeconds']),
+  }
+}
+
+export function parseStatusArgs(raw: unknown): StatusArgs {
+  const commandName = 'zcode.status'
+  const obj = objectArgs(commandName, raw, ['workspace', 'task', 'waitSeconds'])
+  const waitSeconds = obj['waitSeconds'] ?? 0
+  if (typeof waitSeconds !== 'number' || !Number.isFinite(waitSeconds) || waitSeconds < 0 || waitSeconds > MAX_WAIT_SECONDS) {
+    throw new Error(`${commandName} 的 waitSeconds 要是 0 到 ${MAX_WAIT_SECONDS} 之间的数（秒），收到 ${JSON.stringify(obj['waitSeconds'])}`)
+  }
+  return {
+    workspace: workspacePath(commandName, obj['workspace']),
+    task: requireNonEmptyString(commandName, 'task', obj['task'], TASK_MEANING),
+    waitSeconds,
   }
 }

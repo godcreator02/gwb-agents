@@ -1,17 +1,17 @@
 ---
 title: gwb-zcode
-description: 让 agent 经 gwb 工作台给运行中的 ZCode 桌面端派任务：新建会话或在已有会话里接着发指令，一律完全访问，会话出现在 ZCode 侧栏里。本页按接缝讲插件怎么一路连到 ZCode 的任务服务
+description: 让 agent 经 gwb 工作台给运行中的 ZCode 桌面端派任务：新建会话或在已有会话里接着发指令，一律完全访问，发出即返回、再轮询结果，会话出现在 ZCode 侧栏里。本页按接缝讲插件怎么一路连到 ZCode 的任务服务
 ---
 
 **本页回答**：这个插件做什么、它和 agent、ZCode 桌面端之间的每条接缝传什么、由谁负责、怎么测，以及它刻意不做什么。
 
 ZCode 是本机装的另一个 AI 编程客户端（Electron 桌面端，模型走用户的 GLM 套餐）。把批量的活派给它，能省下派活一方自己的模型额度。
 ZCode 没有给外部用的建任务入口：深链接只能打开工作区，本机也没有它的接口端口；能让任务出现在侧栏里、人看得见的，只有它客户端窗口里
-自己的任务服务 `zcodeTaskService`。所以这个插件打开 ZCode 主进程的 Node 调试端口，在窗口里执行脚本调这个服务——
+自己的服务。所以这个插件打开 ZCode 主进程的 Node 调试端口，在窗口里执行脚本调这些服务——
 这条路怎么找到的、为什么不用 CLI 无界面或定时自动化，见轨迹区。
 
-插件只有一个包 `@godcreator/gwb-zcode`（`plugins/zcode/`，入口 `src/index.ts`），两条命令：`zcode.create` 新建会话发任务，
-`zcode.send` 在已有会话里接着发。都先把会话切到「完全访问」，等这一轮做完才把回答交回。
+插件只有一个包 `@godcreator/gwb-zcode`（`plugins/zcode/`，入口 `src/index.ts`），三条命令：`zcode.create` 新建会话发任务、
+`zcode.send` 在已有会话里接着发，两条都先把会话切到「完全访问」、发出去就返回；`zcode.status` 读一个会话最新一轮做完没有、回答是什么。
 
 ## 接缝图
 
@@ -21,16 +21,20 @@ ZCode 没有给外部用的建任务入口：深链接只能打开工作区，�
 
 ### 1 agent → 插件
 
-agent 经 MCP 入口 `run` 调两条命令，参数形状写在登记时的 `usage` 里。参数只在这一层校验，认不出的键直接报错——比如多给一个
+agent 经 MCP 入口 `run` 调三条命令，参数形状写在登记时的 `usage` 里。参数只在这一层校验，认不出的键直接报错——比如多给一个
 `mode` 不会被悄悄忽略，权限只有完全访问一种：
 
-{/* ref file="../plugins/zcode/src/args.ts" lines="21-28" hash="a79674b46996" blob="601ee5a11cce" */}
+{/* ref file="../plugins/zcode/src/args.ts" lines="27-34" hash="a79674b46996" blob="9c9c6bdf9e1f" */}
 
 `workspace` 要是已存在目录的绝对路径，这一条在登记命令的地方查（它要读磁盘）：
 
-{/* ref file="../plugins/zcode/src/index.ts" lines="19-21" hash="a3bef6297dfa" blob="aacae79c0995" */}
+{/* ref file="../plugins/zcode/src/index.ts" lines="18-20" hash="a3bef6297dfa" blob="cdfbe1b7026e" */}
 
-两条命令都等这一轮做完才返回，缺省最多等 1800 秒；到点先交回 `timedOut: true`，ZCode 那边的任务不取消。
+**没有一条命令会一直等到 ZCode 做完。**MCP 客户端等一次调用有上限，Claude Code 是 300 秒没有动静就放弃，而 ZCode 干一个活常常超过这个时间。
+所以 `create` / `send` 发出就返回，`status` 的 `waitSeconds` 最多 240 秒、做完提前交回，agent 隔一阵问一次（轨迹卡[「发出即返回」](/trajectory/2026-10-02-dispatch-then-poll)）：
+
+{/* ref file="../plugins/zcode/src/args.ts" lines="5-6" hash="6cd8bf19180a" blob="9c9c6bdf9e1f" */}
+
 测试：`tests/args.test.ts`。
 
 ### 2 插件 → 进程表
@@ -78,44 +82,51 @@ ZCode 主进程是 Electron 里的 Node。9229 端口没开时，`process._debug
 
 `createTask` 必须带 `v4Create: true`，否则走旧的创建流程，发指令时报数据库关联错误；给它传 `mode` 不起作用：
 
-{/* ref file="../plugins/zcode/src/round.ts" lines="25-29" hash="329cae0cbfd0" blob="371da2295c91" */}
+{/* ref file="../plugins/zcode/src/round.ts" lines="29-33" hash="329cae0cbfd0" blob="1835c595758d" */}
 
-**切完全访问要以代理进程为准。**新会话的代理进程继承这个工作区上次用的模式，而任务的 `meta.mode`（侧栏与界面显示的那个）只在代理的模式真的变了时才更新，
-所以继承到 `yolo` 的新会话 `meta.mode` 停在 `build`，再切 `yolo` 也改不动它。代理实际用的模式在 `zcodeAgentService.readSession` 的 `settings.mode.current`。
-每次发指令前按两处的读数决定怎么切，切完两处都是 `yolo` 才发：
+**完全访问以代理进程为准。**代理实际用的模式在 `zcodeAgentService.readSession` 的 `settings.mode.current`；任务的 `meta.mode`（侧栏与界面显示的那个）
+只在代理的模式真的变了时才更新，会落后——新会话继承到工作区上次用的 `yolo`、跑过的会话放一阵子再恢复，都可能代理是 `yolo`、界面显示「变更前确认」。
+每次发指令前代理不是 `yolo` 就切，切完读回还不是就不发；显示落后时只在会话没在跑的时候先切 `build` 再切 `yolo` 让它跟上，
+跑着的时候切到 `build`，那一瞬间的工具调用会停下等确认（轨迹卡[「模式与收尾信号」](/trajectory/2026-10-02-mode-and-round-signals)、
+[「显示模式会落回」](/trajectory/2026-10-02-displayed-mode-drifts)）：
 
-{/* ref file="../plugins/zcode/src/round.ts" lines="31-53" hash="dfc3e26f02ff" blob="371da2295c91" */}
+{/* ref file="../plugins/zcode/src/round.ts" lines="35-56" hash="4741228ff8df" blob="1835c595758d" */}
 
-先切 `build` 再切 `yolo` 只发生在没跑过的新会话上：正在跑的一轮里切到 `build`，那一瞬间的工具调用会停下等确认。
-来历与实测见轨迹卡[「模式与收尾信号」](/trajectory/2026-10-02-mode-and-round-signals)。
+**发出后等这一轮开始了才交回。**`status` 把「最新一轮」切在最后一条用户消息上，刚发出的一两秒里快照还是上一轮；所以 `send` 每 0.5 秒读一次，
+看到这一轮的提问出现了才交回，30 秒还没出现（多半排在还在跑的上一轮后面）就先交回、带 `roundStarted: false`：
 
-发出以后每 2 秒读一次快照。**判断这一轮做完的难点在于 `status` 落后于消息**：刚发出时还是上一轮的 `completed`，转成 `completed` 时回答可能还没写进快照，
-而一轮里的回答按同一个消息 id 越写越长、写完才带上 `durationMs`。所以三件事一起成立才算做完——出现了发出前没有的消息、状态是结束类的、这一轮的助手消息都有 `durationMs`；
-失败类状态在这一轮开始之后才算数；停在等人确认权限时也交回（完全访问下不该出现，出现了就是哪里不对）：
+{/* ref file="../plugins/zcode/src/round.ts" lines="68-92" hash="533d74f378a3" blob="1835c595758d" */}
 
-{/* ref file="../plugins/zcode/src/task-progress.ts" lines="64-92" hash="9fa1b2555853" blob="96619d6601db" */}
+**判断这一轮做完的难点在于 `status` 落后于消息**：转成 `completed` 时回答可能还没写进快照，而一轮里的回答按同一个消息 id 越写越长、写完才带上 `durationMs`。
+所以状态是结束类的、并且这一轮的助手消息都有 `durationMs` 才算做完；失败类状态不等回答；停在等人确认权限时也算停下了（完全访问下不该出现，出现了就是哪里不对）：
+
+{/* ref file="../plugins/zcode/src/task-progress.ts" lines="68-91" hash="7fa1e134fb83" blob="32ed56e8d12c" */}
+
+`status` 的 `mode` 同样报代理的模式，不报会落后的显示值：
+
+{/* ref file="../plugins/zcode/src/round.ts" lines="94-105" hash="c56d6db6f860" blob="1835c595758d" */}
 
 快照来自 ZCode 内部接口，形状不对直接报错，不按缺省值往下跑。测试：`tests/task-progress.test.ts`，按实测的顺序覆盖一轮里快照的几个阶段：
 
-{/* ref file="../plugins/zcode/tests/task-progress.test.ts" lines="16-37" hash="2c1c01071c80" blob="745ca7d2e429" */}
+{/* ref file="../plugins/zcode/tests/task-progress.test.ts" lines="15-40" hash="f647690a2cd0" blob="2259aedb7c24" */}
 
 ### 6 插件 → 说明书插件
 
 局部注入 `gwbSkills`，登记包里的 `skills/` 目录（相对产物写作 `'../skills/'`，所以 `skills` 在 `package.json` 的 `files` 里）。
-说明书 `zcode` 告诉 agent 什么时候派活、任务说明怎么写、回执怎么读。缺了说明书插件，命令照常可用：
+说明书 `zcode` 告诉 agent 什么时候派活、任务说明怎么写、怎么轮询、回执怎么读。缺了说明书插件，命令照常可用：
 
-{/* ref file="../plugins/zcode/src/index.ts" lines="71-74" hash="51e5202532dc" blob="aacae79c0995" */}
+{/* ref file="../plugins/zcode/src/index.ts" lines="88-90" hash="8a9dbe7a78c3" blob="cdfbe1b7026e" */}
 
 ## 对外能做什么
 
-`zcode.create` 在一个工作区里新建会话、发任务、等做完交回；`zcode.send` 在已有会话里接着发。逐条的参数与回执在[命令](/docs/commands)，
+`zcode.create` 在一个工作区里新建会话、发任务；`zcode.send` 在已有会话里接着发；`zcode.status` 读最新一轮的进度与回答。逐条的参数与回执在[命令](/docs/commands)，
 peer 写法在[插件之间怎么连](/docs/wiring)。
 
 ## 依赖谁
 
 | 依赖 | 用来做什么 | 缺了会怎样 |
 | --- | --- | --- |
-| 命令总线 `gwb-commands`（必需） | 登记两条命令 | 插件不加载 |
+| 命令总线 `gwb-commands`（必需） | 登记三条命令 | 插件不加载 |
 | 说明书 `gwb-skills`（局部注入） | 登记说明书 `zcode` | 照常加载；agent 读不到说明书 |
 | 内核包 `gwb-kernel-desktop` | 接口类型 | — |
 | ZCode 桌面端（本机安装、开着） | 一切：建会话、切模式、发指令、读快照 | 命令报「应有一个 ZCode 主进程」 |
@@ -124,9 +135,9 @@ peer 写法在[插件之间怎么连](/docs/wiring)。
 ## 不做的事
 
 - **不提供别的权限模式**：一律完全访问，没有模式参数（轨迹卡[「一律完全访问」](/trajectory/2026-10-02-full-access-only)）
-- **没有单独读进度的命令**：要看进度就 `zcode.send` 问一句（轨迹卡[「两条命令进插件」](/trajectory/2026-10-02-two-commands-as-plugin)）
+- **不一直等到 ZCode 做完**：发出即返回，结果用 `zcode.status` 查（轨迹卡[「发出即返回」](/trajectory/2026-10-02-dispatch-then-poll)）
+- **不取消任务、不列会话**：只做派活与查结果
 - **不用 ZCode 的 CLI 无界面模式**：会话不进侧栏，人看不见（轨迹卡[「要侧栏可见」](/trajectory/2026-10-02-desktop-visible-over-cli)）
 - **不借定时自动化派任务**（轨迹卡[「不借定时任务」](/trajectory/2026-10-02-no-automation-detour)）
 - **不支持多个 ZCode 实例或多个工作区窗口**：遇到就报错，不替调用方挑
 - **不启动 ZCode**：没开就报错，由人打开
-- **不取消任务**：超时只是先交回，任务在 ZCode 里接着跑

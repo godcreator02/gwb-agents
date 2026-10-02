@@ -1,0 +1,6 @@
+# 19:00 插件改成发出即返回 + zcode.status、模式以代理为准之后（0.1.1-dev.20261002190020，隔离 home），devkit.cdp cmd 回执摘要
+19:00:59 zcode.send sess_c5c99127…（睡 45 秒的任务）：4.9 秒交回 {"status":"running","mode":"yolo","roundStarted":true}
+19:01:04 zcode.status：2.1 秒交回 {"status":"running","roundIsOver":false,"replies":[],"mode":"yolo"}
+19:01:06 zcode.status waitSeconds 120：55.9 秒交回 {"status":"completed","roundIsOver":true,"replies":["我按测试要求睡 45 秒，结束后回复「又睡醒了」。又睡醒了"],"mode":"yolo"}
+之后侧栏索引：{"inSidebarIndex":{"task_status":"completed","mode":"yolo"},"executionState":"{\"mode\":\"yolo\",\"planEnabled\":false}"}（发之前显示是 build、代理是 yolo、没在跑，先切 build 再切 yolo 让显示跟上了）
+9229 已关闭

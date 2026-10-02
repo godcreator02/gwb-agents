@@ -1,10 +1,14 @@
 import type { DesktopServices } from './desktop.js'
-import { FULL_ACCESS_MODE, type RoundOutcome, judgeRound, messageIds, readAgentMode, readSnapshot } from './task-progress.js'
+import { FULL_ACCESS_MODE, type RoundState, messageIds, readAgentMode, readLatestRound, readSnapshot, roundHasStarted } from './task-progress.js'
 
 const POLL_INTERVAL_MS = 2000
+const START_POLL_INTERVAL_MS = 500
+/** 实测发出后约 2 秒这一轮的提问出现在快照里；排在上一轮后面（上一轮还在跑）时会更久，到点就先交回 */
+const START_WAIT_MS = 30_000
 const SNAPSHOT_MESSAGE_LIMIT = 50
 const CLIENT_MODE = 'desktop-continuous'
 const ASK_BEFORE_CHANGES_MODE = 'build'
+const RUNNING_STATUS = 'running'
 
 const sleep = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms))
 
@@ -29,34 +33,44 @@ export async function createTask(services: DesktopServices, workspace: string): 
 }
 
 /**
- * 代理进程的模式真的变了，ZCode 才更新任务的 meta.mode（侧栏与界面显示的那个）。新会话会继承这个工作区上次用的模式，
- * 继承到 yolo 时代理按 yolo 跑、界面却显示「变更前确认」，这时先切 build 再切 yolo 让显示跟上；只有没跑过的新会话会这样，
- * 碰不到正在跑的一轮（跑着的时候切到 build，这一瞬间的工具调用会停下等确认）。切完两处都读回核对，有一处不是 yolo 就不发指令
+ * 以代理进程的模式为准：不是 yolo 就切，切完读回还不是就不发指令。
+ * 任务的 meta.mode（侧栏与界面显示的那个）只在代理的模式真的变了时才更新，会落后：新会话继承到工作区上次用的 yolo、
+ * 跑过的会话放一阵子再恢复，都可能代理是 yolo、界面显示「变更前确认」。这时先切 build 再切 yolo 让显示跟上，
+ * 但只在这条会话没在跑的时候做：跑着的时候切到 build，这一瞬间的工具调用会停下等确认
  */
-async function switchToFullAccess(services: DesktopServices, workspace: string, taskId: string): Promise<void> {
+async function switchToFullAccess(services: DesktopServices, workspace: string, taskId: string): Promise<string> {
   // 先读快照：它会让 ZCode 恢复这条会话，之后 readSession 才读得到
-  const displayedModeBefore = (await snapshotOf(services, workspace, taskId)).meta.mode
+  const before = await snapshotOf(services, workspace, taskId)
   const agentModeBefore = await agentModeOf(services, workspace, taskId)
   if (agentModeBefore !== FULL_ACCESS_MODE) {
     await services.call('zcodeTaskService', 'setMode', { taskId, mode: FULL_ACCESS_MODE })
-  } else if (displayedModeBefore !== FULL_ACCESS_MODE) {
+  } else if (before.meta.mode !== FULL_ACCESS_MODE && before.meta.status !== RUNNING_STATUS) {
     await services.call('zcodeTaskService', 'setMode', { taskId, mode: ASK_BEFORE_CHANGES_MODE })
     await services.call('zcodeTaskService', 'setMode', { taskId, mode: FULL_ACCESS_MODE })
   }
   const agentMode = await agentModeOf(services, workspace, taskId)
-  const displayedMode = (await snapshotOf(services, workspace, taskId)).meta.mode
-  if (agentMode !== FULL_ACCESS_MODE || displayedMode !== FULL_ACCESS_MODE) {
-    throw new Error(
-      `会话 ${taskId} 切换到完全访问（${FULL_ACCESS_MODE}）后读回的模式：代理 ${agentMode}、界面 ${displayedMode}，已停止，指令没有发出`,
-    )
+  if (agentMode !== FULL_ACCESS_MODE) {
+    throw new Error(`会话 ${taskId} 切换到完全访问（${FULL_ACCESS_MODE}）后代理的模式是 ${agentMode}，已停止，指令没有发出`)
   }
+  return agentMode
 }
 
-export async function sendRoundAndWait(
+export interface SentRound {
+  taskId: string
+  title: string
+  status: string | null
+  /** 代理进程实际用的模式，总是 yolo */
+  mode: string
+  /** false：30 秒内这一轮的提问还没出现在快照里（多半排在还在跑的上一轮后面），这时 zcode.status 读到的仍是上一轮 */
+  roundStarted: boolean
+}
+
+/** 切到完全访问、发出指令，等这一轮在快照里开始了就交回，不等它做完 */
+export async function sendRound(
   services: DesktopServices,
-  { workspace, taskId, prompt, timeoutSeconds }: { workspace: string; taskId: string; prompt: string; timeoutSeconds: number },
-): Promise<RoundOutcome> {
-  await switchToFullAccess(services, workspace, taskId)
+  { workspace, taskId, prompt }: { workspace: string; taskId: string; prompt: string },
+): Promise<SentRound> {
+  const agentMode = await switchToFullAccess(services, workspace, taskId)
   const messageIdsBeforeSend = messageIds(await snapshotOf(services, workspace, taskId))
   await services.call('zcodeTaskService', 'sendPrompt', {
     taskId,
@@ -66,11 +80,26 @@ export async function sendRoundAndWait(
     messageId: crypto.randomUUID(),
     clientMode: CLIENT_MODE,
   })
-  const deadline = Date.now() + timeoutSeconds * 1000
+  const deadline = Date.now() + START_WAIT_MS
   for (;;) {
-    const { roundIsOver, outcome } = judgeRound(await snapshotOf(services, workspace, taskId), taskId, messageIdsBeforeSend)
-    if (roundIsOver) return outcome
-    if (Date.now() >= deadline) return { ...outcome, timedOut: true }
+    const snapshot = await snapshotOf(services, workspace, taskId)
+    const roundStarted = roundHasStarted(snapshot, messageIdsBeforeSend)
+    if (roundStarted || Date.now() >= deadline) {
+      return { taskId, title: snapshot.meta.title, status: snapshot.meta.status ?? null, mode: agentMode, roundStarted }
+    }
+    await sleep(START_POLL_INTERVAL_MS)
+  }
+}
+
+/** 读最新一轮；waitSeconds 大于 0 时最多等这么久，做完就提前交回。mode 报代理进程实际用的模式，不报会落后的显示值 */
+export async function readRound(
+  services: DesktopServices,
+  { workspace, taskId, waitSeconds }: { workspace: string; taskId: string; waitSeconds: number },
+): Promise<RoundState & { mode: string }> {
+  const deadline = Date.now() + waitSeconds * 1000
+  for (;;) {
+    const round = readLatestRound(await snapshotOf(services, workspace, taskId), taskId)
+    if (round.roundIsOver || Date.now() >= deadline) return { ...round, mode: await agentModeOf(services, workspace, taskId) }
     await sleep(POLL_INTERVAL_MS)
   }
 }

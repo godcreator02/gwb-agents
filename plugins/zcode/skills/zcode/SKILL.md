@@ -1,12 +1,13 @@
 ---
 name: zcode
-description: 要把活派给本机的 ZCode（另一个 AI 客户端，走 GLM 额度）去做时读：批量迁移、批量改代码这类能写清范围的活。讲 zcode.create / zcode.send 怎么用、任务说明怎么写、回执怎么读、做完怎么复查。
+description: 要把活派给本机的 ZCode（另一个 AI 客户端，走 GLM 额度）去做时读：批量迁移、批量改代码这类能写清范围的活。讲 zcode.create / send / status 怎么用、任务说明怎么写、怎么轮询结果、做完怎么复查。
 ---
 
 # 给 ZCode 派任务
 
-`zcode.create` 在 ZCode 桌面端新建一条会话发任务，`zcode.send` 在已有会话里接着发。会话出现在 ZCode 侧栏里，用户能看着它干、能在界面上接着聊。
-两条都先把会话切到「完全访问」（改文件、运行命令都不先问人），等这一轮做完才返回。参数与回执字段用 `search {"prefix":"zcode."}` 看 usage。
+`zcode.create` 在 ZCode 桌面端新建一条会话发任务，`zcode.send` 在已有会话里接着发，`zcode.status` 读最新一轮做完没有、回答是什么。
+会话出现在 ZCode 侧栏里，用户能看着它干、能在界面上接着聊。派活的两条都先把会话切到「完全访问」（改文件、运行命令都不先问人），**发出去就返回，不等做完**。
+参数与回执字段用 `search {"prefix":"zcode."}` 看 usage。
 
 ## 派一个任务
 
@@ -16,16 +17,19 @@ description: 要把活派给本机的 ZCode（另一个 AI 客户端，走 GLM �
    - 要先读哪些规矩（目标仓的 `AGENTS.md`、相关说明书 `skill.read`；ZCode 接了 gwb 的 MCP 入口，能自己调命令）
    - 做完怎么算完：要跑的检查命令、交回什么（改了哪些文件、检查输出）
    - 不要提交、不要推送，除非这次就是要它提交
-3. `run {"command":"zcode.create","args":{"workspace":"<目录的绝对路径>","prompt":"<任务说明>"}}`。长任务给 `timeoutSeconds`
-4. 读回执：`status` 为 `completed` 且 `replies` 最后一条说做完了，再去复查（下一节）
+3. `run {"command":"zcode.create","args":{"workspace":"<目录的绝对路径>","prompt":"<任务说明>"}}`，记下回执里的 `taskId`
+4. 轮询：`zcode.status {"workspace":"<同上>","task":"<taskId>","waitSeconds":240}`，`roundIsOver` 为 `false` 就再调一次，直到为 `true`。
+   `waitSeconds` 最多 240：MCP 客户端等一次调用有上限（Claude Code 是 300 秒），别想着一次等到底；中间可以先去干别的，回头再查
+5. 做完了读 `replies` 最后一条，再去复查（下一节）
 
-**完成判据**：回执 `ok: true`、`status` 为 `completed`、`mode` 为 `yolo`；复查通过。
+**完成判据**：`status` 回执 `roundIsOver` 为 `true`、`status` 为 `completed`、`mode` 为 `yolo`；复查通过。
 
-## 接着干、问进度
+## 接着干
 
-- 同一个会话续上：`zcode.send {"workspace":"<建它时的目录>","task":"<taskId>","prompt":"<接着做什么>"}`，ZCode 记得前面几轮
-- 回执 `timedOut: true`：ZCode 还在做，任务没有取消。过一会儿 `zcode.send` 问一句进度，别重新 `create`
+- 同一个会话续上：`zcode.send {"workspace":"<建它时的目录>","task":"<taskId>","prompt":"<接着做什么>"}`，ZCode 记得前面几轮；之后照样用 `status` 轮询
+- 上一轮还没做完就 `send`，新指令排在后面，回执 `roundStarted` 可能是 `false`：这时 `status` 读到的还是上一轮，等它做完再查
 - `pendingPermissions` 非空：停在等人确认，请用户去 ZCode 界面处理
+- `status` 是 `failed` / `error`：读 `replies`，改说明后 `send` 重来
 
 ## 复查
 
@@ -33,4 +37,4 @@ ZCode 说「做完了」不算数：自己跑一次它说跑过的检查，`git 
 
 ## 批量派活
 
-一项一个会话、可以同时派几个：几条命令共用一个调试端口连接，互不影响。别把几十项塞进一个会话，上下文越拖越长，后面容易乱。
+一项一个会话，可以先把几项都 `create` 出去，再轮流 `status`：几条命令共用一个调试端口连接，互不影响。别把几十项塞进一个会话，上下文越拖越长，后面容易乱。

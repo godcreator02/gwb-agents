@@ -1,0 +1,5 @@
+# 18:20 在 Claude Code 里经 MCP 入口调 default 上的 @godcreator/gwb-zcode 0.1.0（等这一轮做完才返回的那一版）
+run {"command":"zcode.send","args":{"workspace":"D:\\unitfolders\\00000-console\\console","task":"sess_c5c99127-267a-49b3-9791-3925bb5a204b","timeoutSeconds":600,"prompt":"【gwb-zcode 长等待验收，测试任务】用命令行运行 Start-Sleep -Seconds 330（或等效的 sleep 330），睡完以后只回复：睡醒了。不要做别的事。"}}
+
+# Claude Code 交回的错误原文（约 300 秒后）
+MCP server "gwb" tool "run" sent no response or progress for 300s; aborting. If this server is configured in your MCP settings, set a per-server "timeout" (ms) to allow longer silent runs for just this server; otherwise set CLAUDE_CODE_MCP_TOOL_IDLE_TIMEOUT (ms) globally (0 disables).

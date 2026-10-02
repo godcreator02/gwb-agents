@@ -1,45 +1,62 @@
 ---
 title: 命令
-description: zcode.create 与 zcode.send 的参数、回执、什么情况下报错
+description: zcode.create、zcode.send、zcode.status 的参数、回执、什么情况下报错
 ---
 
-**本页回答**：两条命令各收什么参数、回什么、什么情况下报错。两条的 `effect` 都是 `external`：指令经 ZCode 发给外部的模型服务，ZCode 还会以完全访问权限改本机文件。
+**本页回答**：三条命令各收什么参数、回什么、什么情况下报错。派活的两条 `effect` 是 `external`：指令经 ZCode 发给外部的模型服务，ZCode 还会以完全访问权限改本机文件；
+`zcode.status` 不改数据，但同样要临时打开 ZCode 主进程的调试端口，标 `write`。
+
+一次派活的流程：`create`（或 `send`）拿到 `taskId` → 隔一阵 `status`，直到 `roundIsOver` 为 `true`。
 
 ## zcode.create
 
-在一个工作区里新建会话、切到完全访问、发出任务，等这一轮做完交回。
+在一个工作区里新建会话、切到完全访问、发出任务，等这一轮在 ZCode 里开始了就交回。
 
-{/* ref file="../plugins/zcode/src/args.ts" lines="49-57" hash="1b3fe2767248" blob="601ee5a11cce" */}
+{/* ref file="../plugins/zcode/src/args.ts" lines="49-56" hash="e23579e3b56a" blob="9c9c6bdf9e1f" */}
 
 | 参数 | 必给 | 说明 |
 | --- | --- | --- |
 | `workspace` | 是 | 工作区目录的绝对路径，要已存在。ZCode 在这个目录里干活，侧栏里会话归在这个工作区下 |
 | `prompt` | 是 | 任务说明，非空 |
-| `timeoutSeconds` | 否 | 最多等多少秒，缺省 1800；到点先交回，任务不取消 |
 
 ## zcode.send
 
 在已有会话里接着发指令。`task` 是 `zcode.create` 回执里的 `taskId`，`workspace` 写建它时的那个目录；发之前同样切到完全访问——
 人在界面上把模式改过了也会被切回来。
 
-{/* ref file="../plugins/zcode/src/args.ts" lines="59-68" hash="9514a1e1798d" blob="601ee5a11cce" */}
+{/* ref file="../plugins/zcode/src/args.ts" lines="58-66" hash="7df4d05e2c98" blob="9c9c6bdf9e1f" */}
 
-## 回执
+两条派活命令回执相同：
 
-两条命令回执相同：
-
-{/* ref file="../plugins/zcode/src/index.ts" lines="14-17" hash="1852fcf2285b" blob="aacae79c0995" */}
+{/* ref file="../plugins/zcode/src/index.ts" lines="14-16" hash="574bd9a6514f" blob="cdfbe1b7026e" */}
 
 | 字段 | 说明 |
 | --- | --- |
-| `taskId` | 会话 id（`sess_` 开头），续上时给 `zcode.send` |
+| `taskId` | 会话 id（`sess_` 开头），之后给 `zcode.status` 与 `zcode.send` |
 | `title` | 侧栏里显示的标题，ZCode 自己起，可能在第一轮之后改 |
-| `status` | ZCode 的任务状态：`completed`、`idle` 是正常结束，`failed`、`error`、`cancelled` 是失败 |
-| `mode` | 会话的权限模式，应当总是 `yolo` |
-| `replies` | 这一轮新出现的回答，按出现顺序；中间几条往往是干活过程中的说明，最后一条是收尾的话 |
+| `status` | ZCode 的任务状态，刚发出时通常是 `running` |
+| `mode` | 代理进程实际用的权限模式，总是 `yolo` |
+| `roundStarted` | `false` 表示 30 秒内这一轮还没开始（多半排在还在跑的上一轮后面），这时 `zcode.status` 读到的仍是上一轮 |
+
+## zcode.status
+
+读一个会话最新一轮（最后一条用户消息之后）的进度与回答。
+
+{/* ref file="../plugins/zcode/src/args.ts" lines="68-80" hash="d6018a42de96" blob="9c9c6bdf9e1f" */}
+
+| 参数 | 必给 | 说明 |
+| --- | --- | --- |
+| `workspace`、`task` | 是 | 同 `zcode.send` |
+| `waitSeconds` | 否 | 缺省 0 立即交回；给了就最多等这么久（0 到 240），做完提前交回 |
+
+| 字段 | 说明 |
+| --- | --- |
+| `roundIsOver` | `true` 才是这一轮停下了：做完、失败，或停在等人确认 |
+| `status` | ZCode 的任务状态：`completed`、`idle` 是正常结束，`failed`、`error`、`cancelled` 是失败，`running` 还在跑；没发过指令的会话是 `null` |
+| `replies` | 这一轮的回答，按出现顺序；没做完时是写到一半的内容 |
+| `mode` | 代理进程实际用的权限模式 |
 | `fileChanges` | ZCode 记录的文件改动，原样带回 |
 | `pendingPermissions` | 非空表示停在等人确认，要去 ZCode 界面处理 |
-| `timedOut` | 为 `true` 时到了 `timeoutSeconds` 还没做完，ZCode 还在跑 |
 
 ## 报错
 
@@ -47,9 +64,9 @@ description: zcode.create 与 zcode.send 的参数、回执、什么情况下报
 
 | 原因文本里有 | 怎么办 |
 | --- | --- |
-| `不认识参数`、`缺 …`、`要是绝对路径`、`不是已存在的目录` | 照文本改参数 |
+| `不认识参数`、`缺 …`、`要是绝对路径`、`不是已存在的目录`、`waitSeconds` | 照文本改参数 |
 | `应有一个 ZCode 主进程` | ZCode 没开，或开了多个实例：请用户打开或关掉多余的 |
 | `应有一个 ZCode 工作区窗口` | 请用户关掉多余的 ZCode 窗口 |
-| `找不到 services.zcodeTaskService`、`快照形状不对`、`没回 taskId` | ZCode 升级改了内部结构，插件要跟着改 |
-| `切换到完全访问 … 后读回的模式是` | 模式没切成，指令没发出 |
+| `找不到 services.…`、`快照形状不对`、`没有 settings.mode.current`、`没回 taskId` | ZCode 升级改了内部结构，插件要跟着改 |
+| `切换到完全访问 … 后代理的模式是` | 模式没切成，指令没发出 |
 | `调试协议请求 … 无响应` | 先去 ZCode 侧栏看指令有没有发出去，再决定要不要重调 |

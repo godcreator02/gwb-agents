@@ -1,0 +1,8 @@
+# 18:58 改成发出即返回之后，用新加的 zcode.status 读那条会话（隔离 home zcode-2610021753，devkit.cdp cmd）
+{"taskId":"sess_c5c99127-267a-49b3-9791-3925bb5a204b","title":"gwb-zcode 插件验收测试任务","status":"completed","mode":"build","roundIsOver":true,"replies":["我按测试要求睡 330 秒，结束后回复「睡醒了」。睡醒了"],"fileChanges":[],"pendingPermissions":[]}
+# 任务在 ZCode 里照常做完了，只是结果没回到 Claude Code。这一版的 mode 还是读的快照 meta.mode，显示 build
+
+# 同一时刻侧栏索引与代理（../2610021715_desktop-dispatch-full-access/check-sessions.mjs、../2610021800_mode-and-round-signals/agent-mode.mjs）
+{"sessionId":"sess_c5c99127-267a-49b3-9791-3925bb5a204b","inSidebarIndex":{"title":"gwb-zcode 插件验收测试任务","task_status":"completed","mode":"build"},"executionState":"{\"mode\":\"yolo\",\"planEnabled\":false}"}
+c5c99127 {"mode":"build","settingsMode":{"current":"yolo"}}
+# 这条会话 18:02 起已经切成 yolo、显示也是 yolo；跑完一轮放了一阵子之后，显示又落回 build，代理仍是 yolo

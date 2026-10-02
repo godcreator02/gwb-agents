@@ -1,0 +1,29 @@
+---
+born-at: 2026-10-02T19:03
+type: choice
+parent: [2026-10-02-gwb-zcode]
+label: 发出即返回
+domain: gwb 工具插件
+---
+
+## 背景
+
+0.1.0 的 `zcode.create` / `zcode.send` 等 ZCode 做完一轮才返回。发到 default 后在 Claude Code 里让 ZCode 睡 330 秒，Claude Code 在 300 秒时放弃了这次调用：
+`MCP server "gwb" tool "run" sent no response or progress for 300s; aborting`。ZCode 那边照常做完，结果没回到 agent。把三种办法（放宽客户端的等待上限、插件加一条等待命令、
+让 gwb-mcp 定时发进度）摆给用户，用户说：「应该在我们这轮询zcode或者挂个monitor吧？卡死等着肯定不对吧」。
+
+## 依据
+
+`probes/2610021900_mcp-idle-timeout-and-polling/`：`runs/01` 是错误原文，`runs/02` 是之后读到的结果（任务已做完），`runs/03` 是改完以后发出、读进度、等做完的回执。
+
+supersedes:: [两条命令进插件](2026-10-02-two-commands-as-plugin.md)
+
+## 结论与边界
+
+`zcode.create` / `zcode.send` 发出后等这一轮在 ZCode 里开始了就交回（通常几秒），不等它做完；新加 `zcode.status` 读一个会话最新一轮的进度与回答。
+`zcode.status` 的 `waitSeconds` 最多 240 秒、做完提前交回，留在 Claude Code 300 秒的上限之内，又省得 agent 高频地问。不改客户端配置，也不动 gwb-mcp。
+
+「最新一轮」按最后一条用户消息切分，所以 `send` 要等这一轮的提问出现在快照里才交回，否则紧接着的 `status` 读到的是上一轮；30 秒还没出现（多半排在还在跑的上一轮后面）就先交回、
+带 `roundStarted: false`。去掉了 `timeoutSeconds` 参数、回执改了形状，版本升到 0.2.0。
+
+还是只做派活与查结果：建会话、续上、读进度。不加取消、列会话。

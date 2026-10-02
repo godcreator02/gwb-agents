@@ -1,0 +1,24 @@
+---
+born-at: 2026-10-02T19:03
+type: evidence
+parent: [2026-10-02-gwb-zcode]
+label: 显示模式会落回
+domain: gwb 工具插件
+---
+
+## 背景
+
+上一次的结论以为只有没跑过的新会话才会出现「代理是 yolo、显示是 build」，于是切模式后要求两处都是 yolo。可 18:02 已经切成 yolo、显示也是 yolo 的一条会话，
+跑完一个 330 秒的任务、放了一阵子再读，侧栏显示又落回了 `build`。
+
+## 依据
+
+`probes/2610021900_mcp-idle-timeout-and-polling/runs/02-status-after-cutoff.txt`：侧栏索引 `mode` 为 `build`，会话库执行状态 `{"mode":"yolo"}`，
+代理 `settings.mode.current` 为 `yolo`。`runs/03`：没在跑时先切 `build` 再切 `yolo`，显示回到 `yolo`。
+
+pivots-from:: [模式与收尾信号](2026-10-02-mode-and-round-signals.md)
+
+## 结论与边界
+
+显示的模式（任务 `meta.mode`、侧栏索引的 `mode`）随时可能落后，只能当显示用。插件核对完全访问只看代理的 `settings.mode.current`，回执里的 `mode` 也报它；
+显示落后时只在会话没在跑（`status` 不是 `running`）时拨一下 build→yolo 让它跟上，跑着的时候不拨，以免那一瞬间的工具调用停下等确认。

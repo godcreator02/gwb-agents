@@ -1,12 +1,24 @@
 ---
 title: 命令
-description: zcode.create、zcode.send、zcode.status、zcode.archive 的参数、回执、什么情况下报错
+description: zcode.open、zcode.create、zcode.send、zcode.status、zcode.archive 的参数、回执、什么情况下报错
 ---
 
-**本页回答**：四条命令各收什么参数、回什么、什么情况下报错。派活的两条 `effect` 是 `external`：指令经 ZCode 发给外部的模型服务，ZCode 还会以完全访问权限改本机文件；
-`zcode.status` 不改数据，但同样要临时打开 ZCode 主进程的调试端口，标 `write`；`zcode.archive` 改 ZCode 的任务索引，标 `write`。
+**本页回答**：五条命令各收什么参数、回什么、什么情况下报错。派任务的两条 `effect` 是 `external`：指令经 ZCode 发给外部的模型服务，ZCode 还会以完全访问权限改本机文件；
+`zcode.open` 改 ZCode 窗口显示的工作区，标 `write`；`zcode.status` 不改数据，但同样要临时打开 ZCode 主进程的调试端口，标 `write`；`zcode.archive` 改 ZCode 的任务索引，标 `write`。
 
-一次派活的流程：`create`（或 `send`）拿到 `taskId` → 隔一阵 `status`，直到 `roundIsOver` 为 `true` → 不再用的会话 `archive`。
+一次派任务的流程：要让人在侧栏里看见就先 `open` 那个目录 → `create`（或 `send`）拿到 `taskId` → 隔一阵 `status`，直到 `roundIsOver` 为 `true` → 不再用的会话 `archive`。
+
+## zcode.open
+
+把 ZCode 窗口切到一个工作区。侧栏只显示当前工作区的会话：`zcode.create` 在哪个目录建会话，人就要切到哪个目录才看得见。
+
+{/* ref file="../plugins/zcode/src/args.ts" lines="68-72" hash="4b8567404440" blob="905e1d1be8aa" */}
+
+| 参数 | 必给 | 说明 |
+| --- | --- | --- |
+| `workspace` | 是 | 工作区目录的绝对路径，要已存在 |
+
+回 `{ workspace, switched }`：`switched` 为 `false` 表示窗口本来就在这个工作区，没有动。路径比较不分大小写、不管结尾的分隔符。
 
 ## zcode.create
 
@@ -16,7 +28,7 @@ description: zcode.create、zcode.send、zcode.status、zcode.archive 的参数�
 
 | 参数 | 必给 | 说明 |
 | --- | --- | --- |
-| `workspace` | 是 | 工作区目录的绝对路径，要已存在。ZCode 在这个目录里干活，侧栏里会话归在这个工作区下 |
+| `workspace` | 是 | 工作区目录的绝对路径，要已存在。ZCode 在这个目录里执行任务，侧栏里会话归在这个工作区下 |
 | `prompt` | 是 | 任务说明，非空 |
 
 ## zcode.send
@@ -26,9 +38,9 @@ description: zcode.create、zcode.send、zcode.status、zcode.archive 的参数�
 
 {/* ref file="../plugins/zcode/src/args.ts" lines="58-66" hash="7df4d05e2c98" blob="9c9c6bdf9e1f" */}
 
-两条派活命令回执相同：
+两条派任务的命令回执相同：
 
-{/* ref file="../plugins/zcode/src/index.ts" lines="15-17" hash="574bd9a6514f" blob="5ec367b6c96e" */}
+{/* ref file="../plugins/zcode/src/index.ts" lines="16-18" hash="574bd9a6514f" blob="9aff9a83812e" */}
 
 | 字段 | 说明 |
 | --- | --- |
@@ -42,7 +54,7 @@ description: zcode.create、zcode.send、zcode.status、zcode.archive 的参数�
 
 读一个会话最新一轮（最后一条用户消息之后）的进度与回答。
 
-{/* ref file="../plugins/zcode/src/args.ts" lines="77-89" hash="d6018a42de96" blob="c74bcdf352b0" */}
+{/* ref file="../plugins/zcode/src/args.ts" lines="83-95" hash="d6018a42de96" blob="905e1d1be8aa" */}
 
 | 参数 | 必给 | 说明 |
 | --- | --- | --- |
@@ -61,9 +73,9 @@ description: zcode.create、zcode.send、zcode.status、zcode.archive 的参数�
 ## zcode.archive
 
 把一个会话从 ZCode 侧栏的会话列表里收起来，记录不删，在 ZCode 的已归档列表里还看得到。参数 `workspace`、`task` 同 `zcode.send`，
-只是 `workspace` 那个目录已经删了也行：它只是 ZCode 记会话用的键，归档不在目录里干活。
+只是 `workspace` 那个目录已经删了也行：它只是 ZCode 记会话用的键，归档不在目录里执行任何东西。
 
-{/* ref file="../plugins/zcode/src/args.ts" lines="68-75" hash="4ac2a0ca4267" blob="c74bcdf352b0" */}
+{/* ref file="../plugins/zcode/src/args.ts" lines="74-81" hash="4ac2a0ca4267" blob="905e1d1be8aa" */}
 
 回 `{ taskId, title, archived: true }`。还在跑（`status` 为 `running`）的会话直接报错，等 `zcode.status` 的 `roundIsOver` 为 `true` 再归档；
 已经归档过的再调一次照样成功。
@@ -77,7 +89,8 @@ description: zcode.create、zcode.send、zcode.status、zcode.archive 的参数�
 | `不认识参数`、`缺 …`、`要是绝对路径`、`不是已存在的目录`、`waitSeconds` | 照文本改参数 |
 | `应有一个 ZCode 主进程` | ZCode 没开，或开了多个实例：请用户打开或关掉多余的 |
 | `应有一个 ZCode 工作区窗口` | 请用户关掉多余的 ZCode 窗口 |
-| `找不到 services.…`、`快照形状不对`、`没有 settings.mode.current`、`没回 taskId` | ZCode 升级改了内部结构，插件要跟着改 |
+| `找不到 services.…`、`快照形状不对`、`没有 settings.mode.current`、`没回 taskId`、`activeWorkspacePath 应有一个值` | ZCode 升级改了内部结构，插件要跟着改 |
+| `秒后窗口的工作区仍是` | ZCode 没按启动参数切过去，可能改了启动参数的处理；请用户手动切 |
 | `切换到完全访问 … 后代理的模式是` | 模式没切成，指令没发出 |
 | `还在跑，等这一轮做完 … 再归档` | 用 `zcode.status` 等它做完再 `zcode.archive` |
 | `调过 archiveTask 之后不在 … 的已归档列表里` | `workspace` 不是建这个会话时的目录，或 ZCode 改了归档的做法 |

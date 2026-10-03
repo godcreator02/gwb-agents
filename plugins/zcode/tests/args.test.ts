@@ -1,5 +1,14 @@
 import { describe, expect, it } from 'vitest'
-import { MAX_WAIT_SECONDS, parseArchiveArgs, parseCreateArgs, parseSendArgs, parseStatusArgs } from '../src/args.js'
+import { MAX_WAIT_SECONDS, parseArchiveArgs, parseCreateArgs, parseOpenArgs, parseSendArgs, parseStatusArgs } from '../src/args.js'
+
+describe('parseOpenArgs', () => {
+  it('只收 workspace，要绝对路径', () => {
+    expect(parseOpenArgs({ workspace: 'D:\\repo' })).toEqual({ workspace: 'D:\\repo' })
+    expect(() => parseOpenArgs({})).toThrow('缺 workspace')
+    expect(() => parseOpenArgs({ workspace: 'repo' })).toThrow('要是绝对路径')
+    expect(() => parseOpenArgs({ workspace: 'D:\\repo', prompt: 'x' })).toThrow('不认识参数 prompt')
+  })
+})
 
 describe('parseCreateArgs', () => {
   it('只收 workspace 与 prompt', () => {

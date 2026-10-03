@@ -4,9 +4,10 @@ import type { GwbContext } from '@godcreator/gwb-kernel-desktop'
 import type {} from '@godcreator/gwb-commands'
 import type {} from '@godcreator/gwb-skills'
 import { archiveTask } from './archive.js'
-import { MAX_WAIT_SECONDS, parseArchiveArgs, parseCreateArgs, parseSendArgs, parseStatusArgs } from './args.js'
+import { MAX_WAIT_SECONDS, parseArchiveArgs, parseCreateArgs, parseOpenArgs, parseSendArgs, parseStatusArgs } from './args.js'
 import { withDesktop } from './desktop.js'
 import { createTask, readRound, sendRound } from './round.js'
+import { openWorkspace } from './workspace.js'
 
 export const name = 'gwb-zcode'
 
@@ -25,6 +26,28 @@ export function apply(ctx: GwbContext): void {
   const commands = ctx.gwbCommands
   if (commands === undefined) throw new Error('ctx.gwbCommands 不在：inject 里写了它，cordis 本不该调用 apply')
   const warn = (message: string): void => log.warn(message)
+
+  commands.register(
+    {
+      name: 'zcode.open',
+      description: '把 ZCode 桌面端的窗口切到一个工作区（项目），侧栏随之显示这个工作区的会话',
+      usage:
+        '参数 { workspace: string }：工作区目录的绝对路径，要已存在。要求 ZCode 桌面端开着、只有一个工作区窗口。' +
+        '窗口已经在这个工作区就不动；否则用 ZCode 自己的启动参数 --open-workspace 切过去，再读回窗口当前的工作区核对，10 秒内没切过去就报错。' +
+        '回 { workspace, switched }：switched 为 false 表示本来就在这个工作区。' +
+        'zcode.create 在哪个工作区建会话，侧栏就只在那个工作区下显示它，要让人看见就先 open 同一个目录',
+      effect: 'write',
+    },
+    async (raw) => {
+      const { workspace } = parseOpenArgs(raw)
+      requireExistingDirectory('zcode.open', workspace)
+      return withDesktop(warn, async (services) => {
+        const opened = await openWorkspace(services, workspace)
+        log.info(opened.switched ? `窗口切到工作区 ${workspace}` : `窗口本来就在工作区 ${workspace}`)
+        return { ok: true, data: opened }
+      })
+    },
+  )
 
   commands.register(
     {

@@ -1,27 +1,29 @@
 ---
 title: ZCode 说明书（SKILL 正本）
 name: zcode
-description: 要把活派给本机的 ZCode（另一个 AI 客户端，走 GLM 额度）去做时读：批量迁移、批量改代码这类能写清范围的活。讲 zcode.create / send / status / archive 怎么用、任务说明怎么写、怎么轮询结果、做完怎么复查与归档。
+description: 要把任务交给本机的 ZCode（另一个 AI 客户端，走 GLM 额度）去做时读：批量迁移、批量改代码这类能写清范围的任务。讲 zcode.open / create / send / status / archive 怎么用、任务说明怎么写、怎么轮询结果、做完怎么复查与归档。
 ---
 
 # 给 ZCode 派任务
 
-`zcode.create` 在 ZCode 桌面端新建一条会话发任务，`zcode.send` 在已有会话里接着发，`zcode.status` 读最新一轮做完没有、回答是什么，`zcode.archive` 把用完的会话从侧栏收起来。
-会话出现在 ZCode 侧栏里，用户能看着它干、能在界面上接着聊。派活的两条都先把会话切到「完全访问」（改文件、运行命令都不先问人），**发出去就返回，不等做完**。
+`zcode.open` 把 ZCode 窗口切到一个工作区，`zcode.create` 在 ZCode 桌面端新建一条会话发任务，`zcode.send` 在已有会话里接着发，`zcode.status` 读最新一轮做完没有、回答是什么，`zcode.archive` 把用完的会话从侧栏收起来。
+会话出现在 ZCode 侧栏里，用户能看着它执行、能在界面上接着聊；侧栏只显示窗口当前工作区的会话。派任务的两条都先把会话切到「完全访问」（改文件、运行命令都不先问人），**发出去就返回，不等做完**。
 参数与回执字段用 `search {"prefix":"zcode."}` 看 usage。
 
 ## 派一个任务
 
 1. 确认 ZCode 桌面端开着、只开了一个工作区窗口。没开或开了多个，命令会报错，请用户处理
-2. 写任务说明。ZCode 有完全访问权限，说明里写清：
+2. 用户要在侧栏里看着它执行的，先 `zcode.open {"workspace":"<目录的绝对路径>"}` 把窗口切到下一步建会话用的同一个目录；
+   用户正在 ZCode 里看别的工作区、没说要看的，不切
+3. 写任务说明。ZCode 有完全访问权限，说明里写清：
    - 在哪个目录、改哪些文件，哪些不能碰
    - 要先读哪些规矩（目标仓的 `AGENTS.md`、相关说明书 `skill.read`；ZCode 接了 gwb 的 MCP 入口，能自己调命令）
    - 做完怎么算完：要跑的检查命令、交回什么（改了哪些文件、检查输出）
    - 不要提交、不要推送，除非这次就是要它提交
-3. `run {"command":"zcode.create","args":{"workspace":"<目录的绝对路径>","prompt":"<任务说明>"}}`，记下回执里的 `taskId`
-4. 轮询：`zcode.status {"workspace":"<同上>","task":"<taskId>","waitSeconds":240}`，`roundIsOver` 为 `false` 就再调一次，直到为 `true`。
+4. `run {"command":"zcode.create","args":{"workspace":"<目录的绝对路径>","prompt":"<任务说明>"}}`，记下回执里的 `taskId`
+5. 轮询：`zcode.status {"workspace":"<同上>","task":"<taskId>","waitSeconds":240}`，`roundIsOver` 为 `false` 就再调一次，直到为 `true`。
    `waitSeconds` 最多 240：MCP 客户端等一次调用有上限（Claude Code 是 300 秒），别想着一次等到底；中间可以先去干别的，回头再查
-5. 做完了读 `replies` 最后一条，再去复查（下一节）
+6. 做完了读 `replies` 最后一条，再去复查（下一节）
 
 **完成判据**：`status` 回执 `roundIsOver` 为 `true`、`status` 为 `completed`、`mode` 为 `yolo`；复查通过。
 
@@ -41,6 +43,6 @@ ZCode 说「做完了」不算数：自己跑一次它说跑过的检查，`git 
 复查过、不再接着用的会话：`zcode.archive {"workspace":"<建它时的目录>","task":"<taskId>"}`，从 ZCode 侧栏收起来，记录不删。
 还在跑的会话会报错，等 `status` 的 `roundIsOver` 为 `true` 再归档。用户还要在界面上看的，别替他归档。
 
-## 批量派活
+## 批量派任务
 
 一项一个会话，可以先把几项都 `create` 出去，再轮流 `status`：几条命令共用一个调试端口连接，互不影响。别把几十项塞进一个会话，上下文越拖越长，后面容易乱。

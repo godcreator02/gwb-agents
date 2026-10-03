@@ -11,7 +11,7 @@ description: gwb-zcode 提供的命令与说明书，注入的服务与 peer 写
 
 | 类别 | 名字 | 说明 |
 | --- | --- | --- |
-| 命令 | `zcode.create` / `zcode.send` / `zcode.status` / `zcode.archive` | 给 ZCode 桌面端派任务、读结果、归档会话，形状见[命令](/docs/commands) |
+| 命令 | `zcode.open` / `zcode.create` / `zcode.send` / `zcode.status` / `zcode.archive` | 切 ZCode 窗口的工作区、派任务、读结果、归档会话，形状见[命令](/docs/commands) |
 | 说明书 | `zcode` | 包根 `skills/zcode/`，经 `gwbSkills.register` 登记 |
 
 不提供服务、不注册窗格、不声明设置项。
@@ -25,7 +25,7 @@ description: gwb-zcode 提供的命令与说明书，注入的服务与 peer 写
 
 内核包 `@godcreator/gwb-kernel-desktop`（`^0.10.1`）只提供接口类型。
 
-{/* ref file="../plugins/zcode/src/index.ts" lines="13-13" hash="397a91e60cb0" blob="5ec367b6c96e" */}
+{/* ref file="../plugins/zcode/src/index.ts" lines="14-14" hash="397a91e60cb0" blob="9aff9a83812e" */}
 
 {/* ref file="../plugins/zcode/package.json" lines="30-39" hash="bdbac67a47c7" blob="50940e18c637" */}
 
@@ -45,9 +45,12 @@ description: gwb-zcode 提供的命令与说明书，注入的服务与 peer 写
 | 快照字段 | `getTaskSnapshot` | `meta.mode`、`meta.status`、消息的 `durationMs` | 显示的模式、任务状态、一条回答写完没有 |
 | 会话字段 | `readSession` | `settings.mode.current` | 代理实际用的模式（`session.mode` 可能是旧值） |
 | 模式值 | 两个服务 | `yolo`、`build` | 界面上的「完全访问」「变更前确认」 |
+| 启动参数 | `ZCode.exe` 的第二个实例 | `--open-workspace <目录>` | 让正在运行的 ZCode 把窗口切到这个工作区 |
+| React 树 | ZCode 工作区窗口 | 组件 `memoizedProps.activeWorkspacePath` | 读窗口当前的工作区，核对切没切成 |
+| 主进程字段 | ZCode 主进程 | `process.execPath` | 拿到 `ZCode.exe` 的路径 |
 
 {/* ref file="../plugins/zcode/src/desktop.ts" lines="11-12" hash="e49b60617c05" blob="1cb48af3256e" */}
 
-{/* ref file="../plugins/zcode/src/desktop.ts" lines="21-22" hash="91e6ab54af71" blob="2a7faa4a7dd6" */}
+{/* ref file="../plugins/zcode/src/desktop.ts" lines="24-25" hash="91e6ab54af71" blob="db862b814598" */}
 
 {/* ref file="../plugins/zcode/src/task-progress.ts" lines="3-4" hash="a4db8864185b" blob="987594f93400" */}

@@ -1,0 +1,28 @@
+---
+born-at: 2026-10-03T14:00
+type: choice
+parent: [2026-10-02-gwb-zcode]
+label: 用启动参数切工作区
+domain: gwb 工具插件
+---
+
+## 背景
+
+协作站监听（`sdoen-collab-watch`）用 `zcode.create` 在 `hybrid-mmc\collab` 建会话，会话建好了、也跑完了，用户在 ZCode 侧栏里却看不到：
+侧栏只显示窗口当前工作区的会话，窗口开的是总控台。用户说：「那你操作 zcode 能够帮我开启项目啊」「不是 computeruse 啊，用代码啊」，
+并选了给 gwb-zcode 加一条打开工作区的命令。
+
+## 依据
+
+`probes/2610031400_open-workspace/`：`runs/04`、`runs/06` 是 ZCode 主进程源码里 `--open-workspace` 启动参数与 `zcode://workspace/open` 深链接的处理；
+`runs/07` 是运行 `ZCode.exe --open-workspace` 前后的窗口列表，前后都只有一个窗口；`runs/08` 是之后窗口里 `activeWorkspacePath` 的读数，已是目标目录。
+
+pivots-from:: [要侧栏可见](2026-10-02-desktop-visible-over-cli.md)
+
+## 结论与边界
+
+加 `zcode.open {workspace}`：运行一次 `ZCode.exe --open-workspace <目录>`，再从窗口的 React 树读 `activeWorkspacePath` 核对，10 秒内没切过去就报错；
+本来就在那个工作区就不运行。用启动参数而不调窗口里的服务：这是 ZCode 给外部的入口，压缩后的服务调用也搜不到切工作区的方法名。
+读回核对仍依赖内部的 React 属性。
+
+不在 `zcode.create` 里顺带切工作区：切窗口会打断人正在看的界面，交给调用方决定。只加命令，版本升 y 到 0.2.3。

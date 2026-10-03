@@ -65,6 +65,12 @@ export function parseSendArgs(raw: unknown): SendArgs {
   }
 }
 
+export function parseOpenArgs(raw: unknown): { workspace: string } {
+  const commandName = 'zcode.open'
+  const obj = objectArgs(commandName, raw, ['workspace'])
+  return { workspace: workspacePath(commandName, obj['workspace']) }
+}
+
 export function parseArchiveArgs(raw: unknown): { workspace: string; task: string } {
   const commandName = 'zcode.archive'
   const obj = objectArgs(commandName, raw, ['workspace', 'task'])

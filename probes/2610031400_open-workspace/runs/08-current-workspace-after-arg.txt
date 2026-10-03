@@ -1,0 +1,9 @@
+{
+  "title": "ZCode",
+  "workspaceProps": {
+    "activeWorkspacePath=D:\\unitfolders\\b2o8l-sst-mmc-2026\\hybrid-mmc\\collab": 3,
+    "workspacePath=D:\\unitfolders\\b2o8l-sst-mmc-2026\\hybrid-mmc\\collab": 37,
+    "workspacePath=D:\\unitfolders\\00000-console\\console": 12,
+    "workspacePath=C:\\Users\\godamericatb14\\.zcode\\workspace\\default": 1
+  }
+}

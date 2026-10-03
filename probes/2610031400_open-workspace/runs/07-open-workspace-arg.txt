@@ -1,0 +1,18 @@
+== 之前
+[
+  {
+    "id": 1,
+    "title": "ZCode",
+    "visible": true,
+    "url": "file:///C:/Users/godamericatb14/AppData/Local/Programs/ZCode/resources/app.asar/out/renderer/index.html?restoreSession=true&supportsSettings=true&zcodeLaunchMarks={\"createdAt\":1790932117371.113,\"mainStart\":1790932118781,\"appReady\":1790932119284,\"loadUrl\":1790932121428}"
+  }
+]
+== ZCode.exe --open-workspace D:\unitfolders\b2o8l-sst-mmc-2026\hybrid-mmc\collab 之后 4 秒
+[
+  {
+    "id": 1,
+    "title": "ZCode",
+    "visible": true,
+    "url": "file:///C:/Users/godamericatb14/AppData/Local/Programs/ZCode/resources/app.asar/out/renderer/index.html?restoreSession=true&supportsSettings=true&zcodeLaunchMarks={\"createdAt\":1790932117371.113,\"mainStart\":1790932118781,\"appReady\":1790932119284,\"loadUrl\":1790932121428}"
+  }
+]

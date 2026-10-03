@@ -18,8 +18,22 @@ const FIND_MAIN_PROCESS_SCRIPT =
 
 const ELECTRON_MODULE = 'process.getBuiltinModule("module").createRequire(process.execPath)("electron")'
 
+/** ZCode.exe 的启动参数：ZCode 已经开着时，第二个实例把它转给正在运行的那个，窗口切到这个工作区 */
+export const OPEN_WORKSPACE_ARGUMENT = '--open-workspace'
+
 /** zcodeTaskService 管任务（侧栏里的一条），zcodeAgentService 管会话背后的代理进程 */
 export type DesktopServiceName = 'zcodeTaskService' | 'zcodeAgentService'
+
+/** 窗口当前工作区记在 React 树里组件的 activeWorkspacePath 属性上；几个组件都带着它，值应当一致 */
+const READ_ACTIVE_WORKSPACE_PATHS = `(()=>{
+  const root=document.getElementById('root');
+  const containerKey=Object.keys(root).find(k=>k.startsWith('__reactContainer'));
+  const start=root[containerKey], seen=new Set(), queue=[start,start?.stateNode?.current], paths=new Set();
+  while(queue.length){const fiber=queue.shift();if(!fiber||seen.has(fiber))continue;seen.add(fiber);
+    const value=fiber.memoizedProps?.activeWorkspacePath;if(typeof value==='string')paths.add(value);
+    queue.push(fiber.child,fiber.sibling);}
+  return [...paths];
+})()`
 
 function findServiceInRenderer(serviceName: DesktopServiceName): string {
   return `(()=>{
@@ -35,6 +49,10 @@ function findServiceInRenderer(serviceName: DesktopServiceName): string {
 
 export interface DesktopServices {
   call(service: DesktopServiceName, method: string, args: unknown): Promise<unknown>
+  /** 窗口当前的工作区目录 */
+  readActiveWorkspacePath(): Promise<string>
+  /** ZCode 主进程的 ZCode.exe 路径 */
+  executablePath: string
 }
 
 interface OpenConnection extends DesktopServices {
@@ -142,13 +160,19 @@ async function openConnection(): Promise<OpenConnection> {
     const inspectedProcessId = await socket.evaluate('process.pid')
     if (inspectedProcessId !== processId) throw new Error(`${INSPECTOR_PORT} 端口属于 pid ${String(inspectedProcessId)}，不是 ZCode 主进程 ${processId}`)
     const windowId = await findWorkspaceWindowId(socket.evaluate)
+    const evaluateInWindow = (expression: string): Promise<unknown> =>
+      socket.evaluate(`${ELECTRON_MODULE}.BrowserWindow.fromId(${windowId}).webContents.executeJavaScript(${JSON.stringify(expression)})`)
     const call = (service: DesktopServiceName, method: string, args: unknown): Promise<unknown> =>
-      socket.evaluate(
-        `${ELECTRON_MODULE}.BrowserWindow.fromId(${windowId}).webContents.executeJavaScript(${JSON.stringify(
-          `${findServiceInRenderer(service)}[${JSON.stringify(method)}](${JSON.stringify(args)})`,
-        )})`,
-      )
-    return { call, close }
+      evaluateInWindow(`${findServiceInRenderer(service)}[${JSON.stringify(method)}](${JSON.stringify(args)})`)
+    const readActiveWorkspacePath = async (): Promise<string> => {
+      const paths = (await evaluateInWindow(READ_ACTIVE_WORKSPACE_PATHS)) as string[]
+      if (paths.length !== 1 || paths[0] === undefined) {
+        throw new Error(`窗口的 React 树里 activeWorkspacePath 应有一个值，实际是 ${JSON.stringify(paths)}，ZCode 内部结构可能变了`)
+      }
+      return paths[0]
+    }
+    const executablePath = (await socket.evaluate('process.execPath')) as string
+    return { call, readActiveWorkspacePath, executablePath, close }
   } catch (error) {
     // 连上之后的核对没过，关掉自己打开的端口再报原来的错；关不掉不能盖过原来的错
     await close().catch(() => undefined)

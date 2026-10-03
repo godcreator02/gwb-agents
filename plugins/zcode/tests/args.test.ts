@@ -42,11 +42,18 @@ describe('parseArchiveArgs', () => {
 
 describe('parseStatusArgs', () => {
   it('waitSeconds 缺省 0，不超过上限', () => {
-    expect(parseStatusArgs({ workspace: 'D:\\repo', task: 'sess_1' })).toEqual({ workspace: 'D:\\repo', task: 'sess_1', waitSeconds: 0 })
+    expect(parseStatusArgs({ workspace: 'D:\\repo', task: 'sess_1' })).toEqual({ workspace: 'D:\\repo', task: 'sess_1', waitSeconds: 0, replyTailChars: null })
     expect(parseStatusArgs({ workspace: 'D:\\repo', task: 'sess_1', waitSeconds: MAX_WAIT_SECONDS }).waitSeconds).toBe(MAX_WAIT_SECONDS)
     expect(() => parseStatusArgs({ workspace: 'D:\\repo', task: 'sess_1', waitSeconds: MAX_WAIT_SECONDS + 1 })).toThrow('waitSeconds')
     expect(() => parseStatusArgs({ workspace: 'D:\\repo', task: 'sess_1', waitSeconds: -1 })).toThrow('waitSeconds')
     expect(() => parseStatusArgs({ workspace: 'D:\\repo', task: 'sess_1', waitSeconds: '60' })).toThrow('waitSeconds')
     expect(() => parseStatusArgs({ workspace: 'D:\\repo' })).toThrow('缺 task')
+  })
+
+  it('replyTailChars 缺省全部交回，给了要是正整数', () => {
+    expect(parseStatusArgs({ workspace: 'D:\\repo', task: 'sess_1', replyTailChars: 20000 }).replyTailChars).toBe(20000)
+    expect(() => parseStatusArgs({ workspace: 'D:\\repo', task: 'sess_1', replyTailChars: 0 })).toThrow('replyTailChars')
+    expect(() => parseStatusArgs({ workspace: 'D:\\repo', task: 'sess_1', replyTailChars: 1.5 })).toThrow('replyTailChars')
+    expect(() => parseStatusArgs({ workspace: 'D:\\repo', task: 'sess_1', replyTailChars: '20000' })).toThrow('replyTailChars')
   })
 })

@@ -26,11 +26,11 @@ ZCode 没有给外部用的建任务入口：启动参数与深链接只能打�
 agent 经 MCP 入口 `run` 调五条命令，参数形状写在登记时的 `usage` 里。参数只在这一层校验，认不出的键直接报错——比如多给一个
 `mode` 不会被悄悄忽略，权限只有完全访问一种：
 
-{/* ref file="../plugins/zcode/src/args.ts" lines="27-34" hash="a79674b46996" blob="9c9c6bdf9e1f" */}
+{/* ref file="../plugins/zcode/src/args.ts" lines="29-36" hash="a79674b46996" blob="dad04a3d67e9" */}
 
 `workspace` 要是已存在目录的绝对路径，这一条在登记命令的地方查（它要读磁盘）；`zcode.archive` 不查目录在不在，目录删了的旧会话也要能收起来：
 
-{/* ref file="../plugins/zcode/src/index.ts" lines="20-22" hash="a3bef6297dfa" blob="9aff9a83812e" */}
+{/* ref file="../plugins/zcode/src/index.ts" lines="21-23" hash="a3bef6297dfa" blob="f9305d9c6595" */}
 
 **没有一条命令会一直等到 ZCode 做完。**MCP 客户端等一次调用有上限，Claude Code 是 300 秒没有动静就放弃，而 ZCode 干一个活常常超过这个时间。
 所以 `create` / `send` 发出就返回，`status` 的 `waitSeconds` 最多 240 秒、做完提前交回，agent 隔一阵问一次（轨迹卡[「发出即返回」](/trajectory/2026-10-02-dispatch-then-poll)）：
@@ -124,7 +124,7 @@ ZCode 主进程是 Electron 里的 Node。9229 端口没开时，`process._debug
 局部注入 `gwbSkills`，登记包里的 `skills/` 目录（相对产物写作 `'../skills/'`，所以 `skills` 在 `package.json` 的 `files` 里）。
 说明书 `zcode` 告诉 agent 什么时候派任务、任务说明怎么写、怎么轮询、回执怎么读。缺了说明书插件，命令照常可用：
 
-{/* ref file="../plugins/zcode/src/index.ts" lines="133-135" hash="8a9dbe7a78c3" blob="9aff9a83812e" */}
+{/* ref file="../plugins/zcode/src/index.ts" lines="139-141" hash="8a9dbe7a78c3" blob="f9305d9c6595" */}
 
 ### 7 插件 → 主进程（启动参数）
 

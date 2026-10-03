@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { type SnapshotMessage, type TaskSnapshot, messageIds, readAgentMode, readLatestRound, readSnapshot, roundHasStarted } from '../src/task-progress.js'
+import { type SnapshotMessage, type TaskSnapshot, keepReplyTail, messageIds, readAgentMode, readLatestRound, readSnapshot, roundHasStarted } from '../src/task-progress.js'
 
 function snapshot(status: string | undefined, messages: SnapshotMessage[], pendingPermissions: unknown[] = []): TaskSnapshot {
   return { meta: { title: '标题', status, mode: 'yolo' }, messages, fileChanges: [], runtime: { pendingPermissions } }
@@ -50,6 +50,20 @@ describe('readLatestRound：失败、卡住、没发过指令', () => {
 
   it('还没发过指令的会话：没有轮，也没做完', () => {
     expect(readLatestRound(snapshot(undefined, []), 'sess_1')).toMatchObject({ status: null, roundIsOver: false, replies: [] })
+  })
+})
+
+describe('keepReplyTail：只留回答末尾', () => {
+  it('没超上限：原样交回，省掉 0', () => {
+    expect(keepReplyTail(['第一条', '收尾'], 100)).toEqual({ replies: ['第一条', '收尾'], omittedReplyChars: 0 })
+  })
+
+  it('一条超长：只留它的末尾', () => {
+    expect(keepReplyTail(['工具记录工具记录收尾的话'], 5)).toEqual({ replies: ['录收尾的话'], omittedReplyChars: 7 })
+  })
+
+  it('从最后一条往前留，前面放不下的整条省掉', () => {
+    expect(keepReplyTail(['很早的一条', '中间', '收尾'], 3)).toEqual({ replies: ['间', '收尾'], omittedReplyChars: 6 })
   })
 })
 

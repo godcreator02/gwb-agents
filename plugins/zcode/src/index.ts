@@ -7,6 +7,7 @@ import { archiveTask } from './archive.js'
 import { MAX_WAIT_SECONDS, parseArchiveArgs, parseCreateArgs, parseOpenArgs, parseSendArgs, parseStatusArgs } from './args.js'
 import { withDesktop } from './desktop.js'
 import { createTask, readRound, sendRound } from './round.js'
+import { keepReplyTail } from './task-progress.js'
 import { openWorkspace } from './workspace.js'
 
 export const name = 'gwb-zcode'
@@ -95,16 +96,21 @@ export function apply(ctx: GwbContext): void {
       name: 'zcode.status',
       description: '读 ZCode 一个会话最新一轮的进度与回答：做完没有、回答、是否停在等人确认',
       usage:
-        `参数 { workspace: string, task: string, waitSeconds?: number }。waitSeconds 缺省 0 立即交回；给了就最多等这么久（不超过 ${MAX_WAIT_SECONDS}），做完就提前交回。` +
-        '回 { taskId, title, status, mode, roundIsOver, replies, fileChanges, pendingPermissions }：roundIsOver 为 true 才是做完了；' +
-        'replies 是这一轮的回答（按出现顺序，最后一条是收尾的话）；status 是 ZCode 的任务状态（completed / failed 等）；pendingPermissions 非空表示停在等人确认，去 ZCode 界面处理。' +
+        `参数 { workspace: string, task: string, waitSeconds?: number, replyTailChars?: number }。waitSeconds 缺省 0 立即交回；给了就最多等这么久（不超过 ${MAX_WAIT_SECONDS}），做完就提前交回。` +
+        'replyTailChars（正整数）给了就只交回回答末尾这么多个字符，缺省全部交回：ZCode 会把这一轮的工具调用记录也写进回答，一条就可能有几万字，超过 MCP 单次返回的上限时带上它。' +
+        '回 { taskId, title, status, mode, roundIsOver, replies, omittedReplyChars, fileChanges, pendingPermissions }：roundIsOver 为 true 才是做完了；' +
+        'replies 是这一轮的回答（按出现顺序，最后一条是收尾的话）；omittedReplyChars 是按 replyTailChars 省掉的字符数，没省是 0；status 是 ZCode 的任务状态（completed / failed 等）；pendingPermissions 非空表示停在等人确认，去 ZCode 界面处理。' +
         '不改任何数据，但和另两条一样要临时打开 ZCode 主进程的调试端口',
       effect: 'write',
     },
     async (raw) => {
-      const { workspace, task, waitSeconds } = parseStatusArgs(raw)
+      const { workspace, task, waitSeconds, replyTailChars } = parseStatusArgs(raw)
       requireExistingDirectory('zcode.status', workspace)
-      return withDesktop(warn, async (services) => ({ ok: true, data: await readRound(services, { workspace, taskId: task, waitSeconds }) }))
+      return withDesktop(warn, async (services) => {
+        const round = await readRound(services, { workspace, taskId: task, waitSeconds })
+        const kept = replyTailChars === null ? { replies: round.replies, omittedReplyChars: 0 } : keepReplyTail(round.replies, replyTailChars)
+        return { ok: true, data: { ...round, ...kept } }
+      })
     },
   )
 

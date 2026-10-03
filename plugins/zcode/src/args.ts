@@ -18,6 +18,8 @@ export interface StatusArgs {
   workspace: string
   task: string
   waitSeconds: number
+  /** 只交回回答末尾这么多个字符；null 是全部交回 */
+  replyTailChars: number | null
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -82,14 +84,19 @@ export function parseArchiveArgs(raw: unknown): { workspace: string; task: strin
 
 export function parseStatusArgs(raw: unknown): StatusArgs {
   const commandName = 'zcode.status'
-  const obj = objectArgs(commandName, raw, ['workspace', 'task', 'waitSeconds'])
+  const obj = objectArgs(commandName, raw, ['workspace', 'task', 'waitSeconds', 'replyTailChars'])
   const waitSeconds = obj['waitSeconds'] ?? 0
   if (typeof waitSeconds !== 'number' || !Number.isFinite(waitSeconds) || waitSeconds < 0 || waitSeconds > MAX_WAIT_SECONDS) {
     throw new Error(`${commandName} 的 waitSeconds 要是 0 到 ${MAX_WAIT_SECONDS} 之间的数（秒），收到 ${JSON.stringify(obj['waitSeconds'])}`)
+  }
+  const replyTailChars = obj['replyTailChars'] ?? null
+  if (replyTailChars !== null && (typeof replyTailChars !== 'number' || !Number.isInteger(replyTailChars) || replyTailChars < 1)) {
+    throw new Error(`${commandName} 的 replyTailChars 要是正整数（字符数），收到 ${JSON.stringify(obj['replyTailChars'])}`)
   }
   return {
     workspace: workspacePath(commandName, obj['workspace']),
     task: requireNonEmptyString(commandName, 'task', obj['task'], TASK_MEANING),
     waitSeconds,
+    replyTailChars,
   }
 }

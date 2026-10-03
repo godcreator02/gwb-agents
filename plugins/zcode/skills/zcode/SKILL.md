@@ -22,7 +22,8 @@ description: 要把任务交给本机的 ZCode（另一个 AI 客户端，走 GL
 4. `run {"command":"zcode.create","args":{"workspace":"<目录的绝对路径>","prompt":"<任务说明>"}}`，记下回执里的 `taskId`
 5. 轮询：`zcode.status {"workspace":"<同上>","task":"<taskId>","waitSeconds":240}`，`roundIsOver` 为 `false` 就再调一次，直到为 `true`。
    `waitSeconds` 最多 240：MCP 客户端等一次调用有上限（Claude Code 是 300 秒），别想着一次等到底；中间可以先去干别的，回头再查
-6. 做完了读 `replies` 最后一条，再去复查（下一节）
+6. 做完了读 `replies` 最后一条，再去复查（下一节）。ZCode 会把工具调用记录也写进回答，一轮看图、读文件多的回答能有几万字，
+   回执超过 MCP 单次返回的上限就交不回来：这时带上 `"replyTailChars":20000`，只取回答末尾（收尾的总结在最后）
 
 **完成判据**：`status` 回执 `roundIsOver` 为 `true`、`status` 为 `completed`、`mode` 为 `yolo`；复查通过。
 
@@ -40,7 +41,7 @@ ZCode 说「做完了」不算数：自己跑一次它说跑过的检查，`git 
 ## 收尾：归档
 
 复查过、不再接着用的会话：`zcode.archive {"workspace":"<建它时的目录>","task":"<taskId>"}`，从 ZCode 侧栏收起来，记录不删。
-还在跑的会话会报错，等 `status` 的 `roundIsOver` 为 `true` 再归档。用户还要在界面上看的，别替他归档。
+还在跑的会话会报错，等 `status` 的 `roundIsOver` 为 `true` 再归档。用户还要在界面上看的，别替用户归档。
 
 ## 批量派任务
 

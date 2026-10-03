@@ -12,7 +12,7 @@ description: zcode.open、zcode.create、zcode.send、zcode.status、zcode.archi
 
 把 ZCode 窗口切到一个工作区。侧栏只显示当前工作区的会话：`zcode.create` 在哪个目录建会话，人就要切到哪个目录才看得见。
 
-{/* ref file="../plugins/zcode/src/args.ts" lines="68-72" hash="4b8567404440" blob="905e1d1be8aa" */}
+{/* ref file="../plugins/zcode/src/args.ts" lines="70-74" hash="4b8567404440" blob="dad04a3d67e9" */}
 
 | 参数 | 必给 | 说明 |
 | --- | --- | --- |
@@ -24,7 +24,7 @@ description: zcode.open、zcode.create、zcode.send、zcode.status、zcode.archi
 
 在一个工作区里新建会话、切到完全访问、发出任务，等这一轮在 ZCode 里开始了就交回。
 
-{/* ref file="../plugins/zcode/src/args.ts" lines="49-56" hash="e23579e3b56a" blob="9c9c6bdf9e1f" */}
+{/* ref file="../plugins/zcode/src/args.ts" lines="51-58" hash="e23579e3b56a" blob="dad04a3d67e9" */}
 
 | 参数 | 必给 | 说明 |
 | --- | --- | --- |
@@ -36,11 +36,11 @@ description: zcode.open、zcode.create、zcode.send、zcode.status、zcode.archi
 在已有会话里接着发指令。`task` 是 `zcode.create` 回执里的 `taskId`，`workspace` 写建它时的那个目录；发之前同样切到完全访问——
 人在界面上把模式改过了也会被切回来。
 
-{/* ref file="../plugins/zcode/src/args.ts" lines="58-66" hash="7df4d05e2c98" blob="9c9c6bdf9e1f" */}
+{/* ref file="../plugins/zcode/src/args.ts" lines="60-68" hash="7df4d05e2c98" blob="dad04a3d67e9" */}
 
 两条派任务的命令回执相同：
 
-{/* ref file="../plugins/zcode/src/index.ts" lines="16-18" hash="574bd9a6514f" blob="9aff9a83812e" */}
+{/* ref file="../plugins/zcode/src/index.ts" lines="17-19" hash="574bd9a6514f" blob="f9305d9c6595" */}
 
 | 字段 | 说明 |
 | --- | --- |
@@ -54,18 +54,26 @@ description: zcode.open、zcode.create、zcode.send、zcode.status、zcode.archi
 
 读一个会话最新一轮（最后一条用户消息之后）的进度与回答。
 
-{/* ref file="../plugins/zcode/src/args.ts" lines="83-95" hash="d6018a42de96" blob="905e1d1be8aa" */}
+{/* ref file="../plugins/zcode/src/args.ts" lines="85-102" hash="e8a24168ac6a" blob="dad04a3d67e9" */}
 
 | 参数 | 必给 | 说明 |
 | --- | --- | --- |
 | `workspace`、`task` | 是 | 同 `zcode.send` |
 | `waitSeconds` | 否 | 缺省 0 立即交回；给了就最多等这么久（0 到 240），做完提前交回 |
+| `replyTailChars` | 否 | 正整数：只交回回答末尾这么多个字符；缺省全部交回 |
+
+ZCode 会把这一轮的工具调用记录（工具名、输入、输出）也写进回答，看图、读长文件多的一轮，一条回答就有几万字，
+超过 MCP 入口单次返回的上限（40000 字符），整个回执交不回来。收尾的总结在最后，所以截的是末尾：从最后一条回答往前留，
+合计不超过 `replyTailChars`，越过上限的那一条只留它的末尾，再往前的整条省掉。
+
+{/* ref file="../plugins/zcode/src/task-progress.ts" lines="93-108" hash="0ed3b2279759" blob="4e0b14d7e847" */}
 
 | 字段 | 说明 |
 | --- | --- |
 | `roundIsOver` | `true` 才是这一轮停下了：做完、失败，或停在等人确认 |
 | `status` | ZCode 的任务状态：`completed`、`idle` 是正常结束，`failed`、`error`、`cancelled` 是失败，`running` 还在跑；没发过指令的会话是 `null` |
 | `replies` | 这一轮的回答，按出现顺序；没做完时是写到一半的内容 |
+| `omittedReplyChars` | 按 `replyTailChars` 省掉的字符数；没给这个参数或没省是 0 |
 | `mode` | 代理进程实际用的权限模式 |
 | `fileChanges` | ZCode 记录的文件改动，原样带回 |
 | `pendingPermissions` | 非空表示停在等人确认，要去 ZCode 界面处理 |
@@ -75,7 +83,7 @@ description: zcode.open、zcode.create、zcode.send、zcode.status、zcode.archi
 把一个会话从 ZCode 侧栏的会话列表里收起来，记录不删，在 ZCode 的已归档列表里还看得到。参数 `workspace`、`task` 同 `zcode.send`，
 只是 `workspace` 那个目录已经删了也行：它只是 ZCode 记会话用的键，归档不在目录里执行任何东西。
 
-{/* ref file="../plugins/zcode/src/args.ts" lines="74-81" hash="4ac2a0ca4267" blob="905e1d1be8aa" */}
+{/* ref file="../plugins/zcode/src/args.ts" lines="76-83" hash="4ac2a0ca4267" blob="dad04a3d67e9" */}
 
 回 `{ taskId, title, archived: true }`。还在跑（`status` 为 `running`）的会话直接报错，等 `zcode.status` 的 `roundIsOver` 为 `true` 再归档；
 已经归档过的再调一次照样成功。
@@ -86,7 +94,8 @@ description: zcode.open、zcode.create、zcode.send、zcode.status、zcode.archi
 
 | 原因文本里有 | 怎么办 |
 | --- | --- |
-| `不认识参数`、`缺 …`、`要是绝对路径`、`不是已存在的目录`、`waitSeconds` | 照文本改参数 |
+| `不认识参数`、`缺 …`、`要是绝对路径`、`不是已存在的目录`、`waitSeconds`、`replyTailChars` | 照文本改参数 |
+| `zcode.status` 的返回超过单次返回的上限 | 带上 `replyTailChars`（如 20000）再调 |
 | `应有一个 ZCode 主进程` | ZCode 没开，或开了多个实例：请用户打开或关掉多余的 |
 | `应有一个 ZCode 工作区窗口` | 请用户关掉多余的 ZCode 窗口 |
 | `找不到 services.…`、`快照形状不对`、`没有 settings.mode.current`、`没回 taskId`、`activeWorkspacePath 应有一个值` | ZCode 升级改了内部结构，插件要跟着改 |

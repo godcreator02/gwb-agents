@@ -89,3 +89,20 @@ export function readLatestRound(snapshot: TaskSnapshot, taskId: string): RoundSt
     pendingPermissions,
   }
 }
+
+/**
+ * 从最后一条回答往前留，合计不超过 maxChars 个字符，越过上限的那一条只留它的末尾。
+ * 收尾的总结在最后；ZCode 会把这一轮的工具调用记录也写进回答，一条就可能有几万字
+ */
+export function keepReplyTail(replies: string[], maxChars: number): { replies: string[]; omittedReplyChars: number } {
+  const kept: string[] = []
+  let room = maxChars
+  for (let i = replies.length - 1; i >= 0 && room > 0; i--) {
+    const reply = replies[i]!
+    kept.unshift(reply.length <= room ? reply : reply.slice(reply.length - room))
+    room -= reply.length
+  }
+  const total = replies.reduce((sum, reply) => sum + reply.length, 0)
+  const keptChars = kept.reduce((sum, reply) => sum + reply.length, 0)
+  return { replies: kept, omittedReplyChars: total - keptChars }
+}

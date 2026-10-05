@@ -100,7 +100,7 @@ export function apply(ctx: GwbContext): void {
         'replyTailChars（正整数）给了就只交回回答末尾这么多个字符，缺省全部交回：ZCode 会把这一轮的工具调用记录也写进回答，一条就可能有几万字，超过 MCP 单次返回的上限时带上它。' +
         '回 { taskId, title, status, mode, roundIsOver, replies, omittedReplyChars, fileChanges, pendingPermissions }：roundIsOver 为 true 才是做完了；' +
         'replies 是这一轮的回答（按出现顺序，最后一条是收尾的话）；omittedReplyChars 是按 replyTailChars 省掉的字符数，没省是 0；status 是 ZCode 的任务状态（completed / failed 等）；pendingPermissions 非空表示停在等人确认，去 ZCode 界面处理。' +
-        '不改任何数据，但和另两条一样要临时打开 ZCode 主进程的调试端口',
+        '不改任何数据，但会按需打开 ZCode 主进程的本机调试端口；命令结束断开自己的连接，端口随 ZCode 退出关闭',
       effect: 'write',
     },
     async (raw) => {

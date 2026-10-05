@@ -4,7 +4,7 @@ description: zcode.open、zcode.create、zcode.send、zcode.status、zcode.archi
 ---
 
 **本页回答**：五条命令各收什么参数、回什么、什么情况下报错。派任务的两条 `effect` 是 `external`：指令经 ZCode 发给外部的模型服务，ZCode 还会以完全访问权限改本机文件；
-`zcode.open` 改 ZCode 窗口显示的工作区，标 `write`；`zcode.status` 不改数据，但同样要临时打开 ZCode 主进程的调试端口，标 `write`；`zcode.archive` 改 ZCode 的任务索引，标 `write`。
+`zcode.open` 改 ZCode 窗口显示的工作区，标 `write`；`zcode.status` 不改数据，但同样会按需打开 ZCode 主进程的本机调试端口，标 `write`；`zcode.archive` 改 ZCode 的任务索引，标 `write`。命令结束断开自己的连接，调试端口随 ZCode 退出关闭，避免影响其他 home。
 
 一次派任务的流程：要让人在侧栏里看见就先 `open` 那个目录 → `create`（或 `send`）拿到 `taskId` → 隔一阵 `status`，直到 `roundIsOver` 为 `true` → 不再用的会话 `archive`。
 

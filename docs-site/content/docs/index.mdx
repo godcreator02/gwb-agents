@@ -51,26 +51,27 @@ agent 经 MCP 入口 `run` 调五条命令，参数形状写在登记时的 `usa
 ### 3 插件 → 主进程（调试端口）
 
 ZCode 主进程是 Electron 里的 Node。9229 端口没开时，`process._debugProcess(pid)` 让它在不重启的情况下打开调试端口；开了以后经 WebSocket 发
-`Runtime.evaluate`。只有自己打开的端口，结束时才关掉——端口原来就开着（比如有人在调试 ZCode）就不动它：
+`Runtime.evaluate`。端口属于 ZCode 进程，可能同时被多个 home 或调试器使用。命令结束只断开自己的 WebSocket，端口随 ZCode 退出关闭：
 
-{/* ref file="../plugins/zcode/src/desktop.ts" lines="82-101" hash="8ff492e0d767" blob="db862b814598" */}
+{/* ref file="../plugins/zcode/src/desktop.ts" lines="82-101" hash="2aa62398bdb6" blob="421ea020dcca" */}
 
 连上后先核对端口确实属于刚才找到的那个 pid，别的程序占着 9229 就报错：
 
-{/* ref file="../plugins/zcode/src/desktop.ts" lines="159-161" hash="444caa77a869" blob="db862b814598" */}
+{/* ref file="../plugins/zcode/src/desktop.ts" lines="190-192" hash="444caa77a869" blob="421ea020dcca" */}
 
-**几条命令同时跑时共用一个连接**，最后一条结束才关端口。各自开关的话，先结束的那条会把别人正在用的端口关掉；关端口在 ZCode 那边是
-200 毫秒后才真正生效，正在关的时候来了新命令，要等它关完再重新打开：
+**同一 home 的并发命令共用一个连接**，最后一条结束才断开；不同 home 各用自己的连接。不能根据一个 home 的引用计数关闭整个端口，
+否则一个机器人完成查询会中断另一个的派发回执。也不再安排延迟关闭端口的脚本，避免紧接着到来的命令受到旧定时器影响：
 
-{/* ref file="../plugins/zcode/src/desktop.ts" lines="183-218" hash="97e43b6351a5" blob="db862b814598" */}
+{/* ref file="../plugins/zcode/src/desktop.ts" lines="214-249" hash="a46299878854" blob="421ea020dcca" */}
 
-关端口失败只写一行告警日志、不让命令报错：那时任务已经发出去了，报错会让调用方拿不到 `taskId`。没有自动测试。
+清理连接失败只记告警、不盖过成功回执。WebSocket 断线立即拒绝正在等待的请求、清掉超时计时器；不自动重发任何指令，避免已经派出去的任务重复执行。
+连接与请求都有 30 秒等待上限。`tests/desktop.test.ts` 用两个独立插件实例验证跨 home 并发，并验证断线会立即报错。
 
 ### 4 主进程 → 工作区窗口
 
 在主进程里取 Electron 的 `BrowserWindow`，按页面地址认出工作区窗口，必须恰好一个：
 
-{/* ref file="../plugins/zcode/src/desktop.ts" lines="140-146" hash="f922dac801c5" blob="db862b814598" */}
+{/* ref file="../plugins/zcode/src/desktop.ts" lines="173-179" hash="f922dac801c5" blob="421ea020dcca" */}
 
 然后在那个窗口里 `executeJavaScript`，从 React 的根节点沿 fiber 树广度优先找到 `memoizedProps.services` 下的服务，调它的方法，
 返回值按 JSON 带回。用到两个服务：`zcodeTaskService` 管任务（侧栏里的一条），`zcodeAgentService` 管会话背后的代理进程。
@@ -80,7 +81,7 @@ ZCode 主进程是 Electron 里的 Node。9229 端口没开时，`process._debug
 
 {/* ref file="../plugins/zcode/src/desktop.ts" lines="38-48" hash="ec001d7bb4d6" blob="db862b814598" */}
 
-{/* ref file="../plugins/zcode/src/desktop.ts" lines="162-166" hash="526d0309baef" blob="db862b814598" */}
+{/* ref file="../plugins/zcode/src/desktop.ts" lines="193-197" hash="526d0309baef" blob="421ea020dcca" */}
 
 ### 5 窗口 → 会话
 

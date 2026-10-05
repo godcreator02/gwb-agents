@@ -75,25 +75,25 @@ async function findZCodeMainProcessId(): Promise<number> {
 }
 
 async function listInspectorTargets(): Promise<{ webSocketDebuggerUrl?: string }[]> {
-  const response = await fetch(INSPECTOR_LIST_URL)
+  const response = await fetch(INSPECTOR_LIST_URL, { signal: AbortSignal.timeout(3_000) })
   return (await response.json()) as { webSocketDebuggerUrl?: string }[]
 }
 
-/** 端口没开时 fetch 连接失败，这时给主进程发信号打开它；openedByUs 决定结束时要不要关掉 */
-async function openInspector(processId: number): Promise<{ webSocketUrl: string; openedByUs: boolean }> {
+/** 端口属于 ZCode 进程，可能被多个 home 共用；这里只确保打开，不取得关闭整个端口的所有权。 */
+async function openInspector(processId: number): Promise<string> {
   const firstUrl = (targets: { webSocketDebuggerUrl?: string }[]): string => {
     const url = targets[0]?.webSocketDebuggerUrl
     if (url === undefined) throw new Error(`${INSPECTOR_LIST_URL} 里没有可连接的目标`)
     return url
   }
   try {
-    return { webSocketUrl: firstUrl(await listInspectorTargets()), openedByUs: false }
+    return firstUrl(await listInspectorTargets())
   } catch {
     ;(process as unknown as { _debugProcess(pid: number): void })._debugProcess(processId)
     for (let attempt = 0; attempt < 30; attempt++) {
       await sleep(100)
       try {
-        return { webSocketUrl: firstUrl(await listInspectorTargets()), openedByUs: true }
+        return firstUrl(await listInspectorTargets())
       } catch {}
     }
     throw new Error(`给 ZCode 主进程（pid ${processId}）打开调试端口后 3 秒内 ${INSPECTOR_LIST_URL} 仍连不上`)
@@ -103,25 +103,43 @@ async function openInspector(processId: number): Promise<{ webSocketUrl: string;
 function connectWebSocket(webSocketUrl: string): Promise<{ evaluate(expression: string): Promise<unknown>; close(): void }> {
   const socket = new WebSocket(webSocketUrl)
   let nextRequestId = 0
-  const pendingReplies = new Map<number, (reply: { result?: unknown; error?: unknown }) => void>()
+  const pendingReplies = new Map<number, {
+    reply(value: { result?: unknown; error?: unknown }): void
+    fail(error: Error): void
+  }>()
+  const disconnected = (): Error => new Error('ZCode 调试连接已断开；如果是在发送指令，先去 ZCode 侧栏确认有没有发出去再重试')
+  const failPending = (error: Error): void => {
+    for (const pending of pendingReplies.values()) pending.fail(error)
+    pendingReplies.clear()
+  }
   socket.onmessage = (event) => {
     const reply = JSON.parse(String(event.data)) as { id: number; result?: unknown; error?: unknown }
-    pendingReplies.get(reply.id)?.(reply)
+    pendingReplies.get(reply.id)?.reply(reply)
     pendingReplies.delete(reply.id)
   }
   const request = (method: string, params: unknown): Promise<unknown> =>
     new Promise((resolve, reject) => {
+      if (socket.readyState !== 1) { reject(disconnected()); return }
       const id = ++nextRequestId
       const timer = setTimeout(() => {
         pendingReplies.delete(id)
         reject(new Error(`调试协议请求 ${method} ${RPC_TIMEOUT_MS / 1000} 秒无响应；如果是在发送指令，先去 ZCode 侧栏确认有没有发出去再重试`))
       }, RPC_TIMEOUT_MS)
-      pendingReplies.set(id, (reply) => {
-        clearTimeout(timer)
-        if (reply.error !== undefined) reject(new Error(`调试协议请求 ${method} 失败：${JSON.stringify(reply.error)}`))
-        else resolve(reply.result)
+      pendingReplies.set(id, {
+        reply: (reply) => {
+          clearTimeout(timer)
+          if (reply.error !== undefined) reject(new Error(`调试协议请求 ${method} 失败：${JSON.stringify(reply.error)}`))
+          else resolve(reply.result)
+        },
+        fail: (error) => { clearTimeout(timer); reject(error) },
       })
-      socket.send(JSON.stringify({ id, method, params }))
+      try {
+        socket.send(JSON.stringify({ id, method, params }))
+      } catch (error) {
+        clearTimeout(timer)
+        pendingReplies.delete(id)
+        reject(error)
+      }
     })
   const evaluate = async (expression: string): Promise<unknown> => {
     const result = (await request('Runtime.evaluate', { expression, awaitPromise: true, returnByValue: true })) as {
@@ -132,8 +150,23 @@ function connectWebSocket(webSocketUrl: string): Promise<{ evaluate(expression: 
     return result.result.value
   }
   return new Promise((resolve, reject) => {
-    socket.onopen = () => resolve({ evaluate, close: () => socket.close() })
-    socket.onerror = () => reject(new Error(`连不上调试端口的 WebSocket：${webSocketUrl}`))
+    const close = (): void => { failPending(disconnected()); socket.close() }
+    const connectionTimer = setTimeout(() => {
+      reject(new Error(`连接 ZCode 调试端口 ${RPC_TIMEOUT_MS / 1000} 秒无响应`))
+      close()
+    }, RPC_TIMEOUT_MS)
+    socket.onopen = () => { clearTimeout(connectionTimer); resolve({ evaluate, close }) }
+    socket.onclose = () => {
+      clearTimeout(connectionTimer)
+      const error = disconnected()
+      failPending(error)
+      reject(error)
+    }
+    socket.onerror = () => {
+      clearTimeout(connectionTimer)
+      reject(new Error('连不上 ZCode 调试端口的 WebSocket'))
+      close()
+    }
   })
 }
 
@@ -147,14 +180,12 @@ async function findWorkspaceWindowId(evaluate: (expression: string) => Promise<u
 
 async function openConnection(): Promise<OpenConnection> {
   const processId = await findZCodeMainProcessId()
-  const { webSocketUrl, openedByUs } = await openInspector(processId)
+  const webSocketUrl = await openInspector(processId)
   const socket = await connectWebSocket(webSocketUrl)
   const close = async (): Promise<void> => {
-    try {
-      if (openedByUs) await socket.evaluate('setTimeout(()=>process.getBuiltinModule("inspector").close(),200); true')
-    } finally {
-      socket.close()
-    }
+    // 只释放自己的连接。inspector.close() 会中断其他 home/调试器，并可能阻塞主进程。
+    // 端口随 ZCode 进程退出而关闭，不能用本 home 的引用计数推断全局无人使用。
+    socket.close()
   }
   try {
     const inspectedProcessId = await socket.evaluate('process.pid')
@@ -174,15 +205,15 @@ async function openConnection(): Promise<OpenConnection> {
     const executablePath = (await socket.evaluate('process.execPath')) as string
     return { call, readActiveWorkspacePath, executablePath, close }
   } catch (error) {
-    // 连上之后的核对没过，关掉自己打开的端口再报原来的错；关不掉不能盖过原来的错
+    // 核对没过只断开自己的连接，不在未知进程里执行关闭端口的脚本。
     await close().catch(() => undefined)
     throw error
   }
 }
 
 /**
- * 同时跑的几条命令共用一个连接：最后一个用完才关端口。关端口是异步的（ZCode 那边 200 毫秒后才真正关），
- * 正在关的时候来了新的使用者，要等它关完再重新打开，否则新连接会被这次关闭一起关掉。
+ * 同一 home 同时跑的命令共用连接，最后一个用完只断开这条 WebSocket。
+ * 不同 home 各用各的连接，共用的 ZCode 调试端口不由任何一个 home 擅自关闭。
  */
 let sharedConnection: { opening: Promise<OpenConnection>; users: number } | undefined
 let closingConnection: Promise<void> = Promise.resolve()
@@ -207,9 +238,9 @@ export async function withDesktop<T>(
     current.users--
     if (current.users === 0 && sharedConnection === current) {
       sharedConnection = undefined
-      // 任务已经发出去了，关端口失败不能让命令报错丢掉回执；端口可能还开着，写进日志
+      // 任务已经发出去了，清理连接失败不能盖过成功回执。
       closingConnection = current.opening.then(
-        (connection) => connection.close().catch((error: unknown) => warn(`关闭 ZCode 调试端口 ${INSPECTOR_PORT} 失败：${String(error)}`)),
+        (connection) => connection.close().catch((error: unknown) => warn(`断开 ZCode 调试连接失败：${String(error)}`)),
         () => undefined,
       )
       await closingConnection

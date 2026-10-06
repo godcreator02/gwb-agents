@@ -1,0 +1,21 @@
+---
+born-at: 2026-10-06T22:05
+type: choice
+parent: [2026-10-02-gwb-zcode]
+label: 回报直报
+domain: 任务通道
+---
+
+## 背景
+
+接缝图集单元的架构评审定了分层边界：底层执行端插件（zcode、claudecode）业务无关，不知道 QQ、协作站、票据、回报。zcode.report 的中转模型（ReportBook 落盘、转发登记的接收命令、replay 补交）让底层持票据、知接收方，越过了这条线；且 qq-bot 已改为执行端直报，一台机器两套回报模型并存。
+
+## 结论与边界
+
+删除 zcode.report、zcode.report.replay 与 create / send 的 report 参数（接的是「主动回报」那张卡选的型），回报改为发起方自签票据、执行端直报发起方的接收命令；重载窗口期靠执行端同票重交，不再有 replay 补交。票据校验与幂等判定抽成共享纯函数包 @godcreator/gwb-report-contract（qq-bot、协作站各自 import，运行时零耦合）。
+
+同 workspace 同一时间只跑一轮下沉到底层：zcode 用内存占用表（create / send 登记，status 读到做完或 archive 时释放，占用者其实已做完时先自动释放再派），claudecode 按会话状态判占用；两边各记各的、不共表，跨执行端共表等出现真实的跨端同目录并发问题再做。
+
+## 依据
+
+方案、决策与触发信号的正本在接缝图集单元 uxje5-gwb-seams 的文档站（agent 派单架构篇与路线图）。隔离 home dispatch-2610062150 实测：占用拒绝（统一措辞带占用中 taskId）、占用者已做完时自愈释放、zcode.report 回「没有这条命令」。

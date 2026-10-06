@@ -1,18 +1,18 @@
 ---
 title: 命令
-description: zcode.open、zcode.create、zcode.send、zcode.report、zcode.status、zcode.archive 的参数、回执、什么情况下报错
+description: zcode.open、zcode.create、zcode.send、zcode.status、zcode.archive 的参数、回执、什么情况下报错
 ---
 
-**本页回答**：六条公开命令各收什么参数、回什么、什么情况下报错。派任务的两条 `effect` 是 `external`：指令经 ZCode 发给外部的模型服务，ZCode 还会以完全访问权限改本机文件；
+**本页回答**：五条公开命令各收什么参数、回什么、什么情况下报错。派任务的两条 `effect` 是 `external`：指令经 ZCode 发给外部的模型服务，ZCode 还会以完全访问权限改本机文件；
 `zcode.open` 改 ZCode 窗口显示的工作区，标 `write`；`zcode.status` 不改数据，但同样会按需打开 ZCode 主进程的本机调试端口，标 `write`；`zcode.archive` 改 ZCode 的任务索引，标 `write`。命令结束断开自己的连接，调试端口随 ZCode 退出关闭，避免影响其他 home。
 
-一次派任务的流程：要让人在侧栏里看见就先 `open` 那个目录 → `create`（或 `send`）拿到 `taskId` → 带 `report` 的派单由任务主动回报，普通调用按需查 `status` → 不再用的会话 `archive`。
+一次派任务的流程：要让人在侧栏里看见就先 `open` 那个目录 → `create`（或 `send`）拿到 `taskId` → 按需查 `status` → 不再用的会话 `archive`。回报不经过这些命令：发起方自己签票据、执行端直报发起方的接收命令。
 
 ## zcode.open
 
 把 ZCode 窗口切到一个工作区。侧栏只显示当前工作区的会话：`zcode.create` 在哪个目录建会话，人就要切到哪个目录才看得见。
 
-{/* ref file="../plugins/zcode/src/args.ts" lines="74-78" hash="4b8567404440" blob="9c17752a7371" */}
+{/* ref file="../plugins/zcode/src/args.ts" lines="70-74" hash="4b8567404440" blob="dad04a3d67e9" */}
 
 | 参数 | 必给 | 说明 |
 | --- | --- | --- |
@@ -24,24 +24,25 @@ description: zcode.open、zcode.create、zcode.send、zcode.report、zcode.statu
 
 在一个工作区里新建会话、切到完全访问、发出任务，等这一轮在 ZCode 里开始了就交回。
 
-{/* ref file="../plugins/zcode/src/args.ts" lines="53-61" hash="59e9a5b41c1d" blob="9c17752a7371" */}
+{/* ref file="../plugins/zcode/src/args.ts" lines="51-58" hash="e23579e3b56a" blob="dad04a3d67e9" */}
 
 | 参数 | 必给 | 说明 |
 | --- | --- | --- |
 | `workspace` | 是 | 工作区目录的绝对路径，要已存在。ZCode 在这个目录里执行任务，侧栏里会话归在这个工作区下 |
-| `prompt` | 是 | 任务说明，非空 |
-| `report` | 否 | `{id,callback,server}`：本轮唯一 id、接收命令、连接到本 home 的 MCP 服务名。发送前保存 ticket 并附加回报约定 |
+| `prompt` | 是 | 任务说明，非空。回报约定（如有）由发起方写进这里，本插件不另收回报参数 |
+
+同工作区同一时间只跑一轮：上一轮还没做完时 `create` 直接报「workspace 已被会话 … 占用」（错误信息带占用中的 taskId）；上一轮其实已做完的会先自动释放再派。`status` 读到 `roundIsOver` 为 true 或 `archive` 之后占用放开。
 
 ## zcode.send
 
 在已有会话里接着发指令。`task` 是 `zcode.create` 回执里的 `taskId`，`workspace` 写建它时的那个目录；发之前同样切到完全访问——
 人在界面上把模式改过了也会被切回来。
 
-{/* ref file="../plugins/zcode/src/args.ts" lines="63-72" hash="f1e47472297c" blob="9c17752a7371" */}
+{/* ref file="../plugins/zcode/src/args.ts" lines="60-68" hash="7df4d05e2c98" blob="dad04a3d67e9" */}
 
 两条派任务的命令回执相同：
 
-{/* ref file="../plugins/zcode/src/index.ts" lines="20-22" hash="574bd9a6514f" blob="e7d20e92e580" */}
+{/* ref file="../plugins/zcode/src/index.ts" lines="19-21" hash="574bd9a6514f" blob="901c736691f0" */}
 
 | 字段 | 说明 |
 | --- | --- |
@@ -51,19 +52,11 @@ description: zcode.open、zcode.create、zcode.send、zcode.report、zcode.statu
 | `mode` | 代理进程实际用的权限模式，总是 `yolo` |
 | `roundStarted` | `false` 表示 30 秒内这一轮还没开始（多半排在还在跑的上一轮后面），这时 `zcode.status` 读到的仍是上一轮 |
 
-## zcode.report
-
-任务按本轮提示调用 `{ticket,state,text}`：`state` 为 `completed`、`failed` 或 `needs_input`，`text` 非空且最多 16000 字。只接本 home 已登记的 ticket，结果先落盘再调用绑定的接收命令；同结果重交去重，不同结果拒绝覆盖。
-
-回 `{recorded,accepted,duplicate}`。`recorded` 是已保存，`accepted` 是接收命令已接受；二者都不代表 QQ 已送达或 ZCode 进程已退出。接收插件加载时一次补交未接受结果。任务崩溃、漏报或需要界面权限确认时，仍须按需查状态。
-
-{/* ref file="../plugins/zcode/src/reports.ts" hash="b2cda0ec81f8" blob="022cd90e99dd" */}
-
 ## zcode.status
 
 读一个会话最新一轮（最后一条用户消息之后）的进度与回答。
 
-{/* ref file="../plugins/zcode/src/args.ts" lines="89-106" hash="e8a24168ac6a" blob="9c17752a7371" */}
+{/* ref file="../plugins/zcode/src/args.ts" lines="85-102" hash="e8a24168ac6a" blob="dad04a3d67e9" */}
 
 | 参数 | 必给 | 说明 |
 | --- | --- | --- |
@@ -92,7 +85,7 @@ ZCode 会把这一轮的工具调用记录（工具名、输入、输出）也�
 把一个会话从 ZCode 侧栏的会话列表里收起来，记录不删，在 ZCode 的已归档列表里还看得到。参数 `workspace`、`task` 同 `zcode.send`，
 只是 `workspace` 那个目录已经删了也行：它只是 ZCode 记会话用的键，归档不在目录里执行任何东西。
 
-{/* ref file="../plugins/zcode/src/args.ts" lines="80-87" hash="4ac2a0ca4267" blob="9c17752a7371" */}
+{/* ref file="../plugins/zcode/src/args.ts" lines="76-83" hash="4ac2a0ca4267" blob="dad04a3d67e9" */}
 
 回 `{ taskId, title, archived: true }`。还在跑（`status` 为 `running`）的会话直接报错，等 `zcode.status` 的 `roundIsOver` 为 `true` 再归档；
 已经归档过的再调一次照样成功。

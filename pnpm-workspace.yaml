@@ -10,6 +10,7 @@
 
 packages:
   - plugins/*
+  - packages/*
 
 allowBuilds:
   # @tailwindcss/node 间接依赖的包，它的安装脚本不需要运行

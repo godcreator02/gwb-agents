@@ -1,5 +1,4 @@
 import path from 'node:path'
-import { parseReportTarget, type ReportTarget } from './reports.js'
 
 /** 各命令的参数校验：认不出的键直接报错，不静默忽略 */
 
@@ -9,7 +8,6 @@ export const MAX_WAIT_SECONDS = 240
 export interface CreateArgs {
   workspace: string
   prompt: string
-  report?: ReportTarget
 }
 
 export interface SendArgs extends CreateArgs {
@@ -52,22 +50,20 @@ const TASK_MEANING = 'zcode.create 回执里的 taskId（sess_ 开头）'
 
 export function parseCreateArgs(raw: unknown): CreateArgs {
   const commandName = 'zcode.create'
-  const obj = objectArgs(commandName, raw, ['workspace', 'prompt', 'report'])
+  const obj = objectArgs(commandName, raw, ['workspace', 'prompt'])
   return {
     workspace: workspacePath(commandName, obj['workspace']),
     prompt: requireNonEmptyString(commandName, 'prompt', obj['prompt'], '发给 ZCode 的任务说明'),
-    ...(obj.report === undefined ? {} : { report: parseReportTarget(obj.report) }),
   }
 }
 
 export function parseSendArgs(raw: unknown): SendArgs {
   const commandName = 'zcode.send'
-  const obj = objectArgs(commandName, raw, ['workspace', 'task', 'prompt', 'report'])
+  const obj = objectArgs(commandName, raw, ['workspace', 'task', 'prompt'])
   return {
     workspace: workspacePath(commandName, obj['workspace']),
     task: requireNonEmptyString(commandName, 'task', obj['task'], TASK_MEANING),
     prompt: requireNonEmptyString(commandName, 'prompt', obj['prompt'], '发给 ZCode 的指令'),
-    ...(obj.report === undefined ? {} : { report: parseReportTarget(obj.report) }),
   }
 }
 

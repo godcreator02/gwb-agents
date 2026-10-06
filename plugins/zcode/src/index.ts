@@ -1,21 +1,20 @@
 import fs from 'node:fs'
-import path from 'node:path'
 import type { GwbContext } from '@godcreator/gwb-kernel-desktop'
 // 空的类型 import 只为让这几个包的 `declare module 'cordis'` 生效，ctx 上才有对应服务的类型
 import type {} from '@godcreator/gwb-commands'
 import type {} from '@godcreator/gwb-skills'
-import type {} from '@godcreator/gwb-data'
-import { ReportBook, parseReplay } from './reports.js'
+import { workspaceOccupiedMessage } from '@godcreator/gwb-report-contract'
 import { archiveTask } from './archive.js'
 import { MAX_WAIT_SECONDS, parseArchiveArgs, parseCreateArgs, parseOpenArgs, parseSendArgs, parseStatusArgs } from './args.js'
-import { withDesktop } from './desktop.js'
+import { withDesktop, type DesktopServices } from './desktop.js'
+import { WorkspaceOccupancy } from './occupancy.js'
 import { createTask, readRound, sendRound } from './round.js'
 import { keepReplyTail } from './task-progress.js'
 import { openWorkspace } from './workspace.js'
 
 export const name = 'gwb-zcode'
 
-export const inject = ['gwbCommands', 'gwbData']
+export const inject = ['gwbCommands']
 
 const SENT_SHAPE =
   '发出后等这一轮在 ZCode 里开始了就交回（通常 2 秒左右），不等它做完：回 { taskId, title, status, mode, roundStarted }。' +
@@ -30,20 +29,19 @@ export function apply(ctx: GwbContext): void {
   const commands = ctx.gwbCommands
   if (commands === undefined) throw new Error('ctx.gwbCommands 不在：inject 里写了它，cordis 本不该调用 apply')
   const warn = (message: string): void => log.warn(message)
-  const reports = new ReportBook({
-    home: path.basename(ctx.gwbKernel.dataDir),
-    read: () => ctx.gwbData.readDoc('reports'),
-    write: (value) => ctx.gwbData.writeDoc('reports', value),
-    deliver: (command, report) => commands.run(command, report),
-    warn,
-  })
-  ctx.effect(() => () => reports.close())
-  commands.register({ name: 'zcode.report', description: '提交派单指定的本轮结果，保存后立即通知派单方',
-    usage: '{ ticket: string, state: "completed"|"failed"|"needs_input", text: string }。ticket 来自本轮任务；使用指定 home 的 MCP 服务。相同结果重交去重，不同结果拒绝覆盖。回 {recorded, accepted, duplicate}；recorded 表示已保存，accepted 表示接收方已接收，不代表 QQ 已送达。', effect: 'external' },
-    async (raw) => ({ ok: true, data: await reports.report(raw) }))
-  commands.register({ name: 'zcode.report.replay', description: '接收插件加载后补交已经保存但尚未接收的结果',
-    usage: '{callback: string}。只由接收插件在加载时调用，不派发任务、不轮询。', effect: 'external', hiddenFromAgents: true },
-    async (raw) => ({ ok: true, data: await reports.replay(parseReplay(raw)) }))
+  // 同 workspace 同一时间只跑一轮的登记表；回报不在这层——发起方各自签票据、执行端直报发起方的接收命令
+  const occupancy = new WorkspaceOccupancy()
+  const ensureWorkspaceFree = async (services: DesktopServices, workspace: string, exceptTaskId: string | null): Promise<void> => {
+    const holder = occupancy.holderOf(workspace)
+    if (holder === undefined || holder === exceptTaskId) return
+    let over = false
+    try { over = (await readRound(services, { workspace, taskId: holder, waitSeconds: 0 })).roundIsOver } catch { over = false }
+    if (!over) {
+      log.info(`工作区 ${workspace} 仍被会话 ${holder} 占用，拒绝新派单`)
+      throw new Error(workspaceOccupiedMessage(holder))
+    }
+    occupancy.release(workspace, holder)
+  }
 
   commands.register(
     {
@@ -72,21 +70,21 @@ export function apply(ctx: GwbContext): void {
       name: 'zcode.create',
       description: '在 ZCode 桌面端的一个工作区里新建会话、以完全访问权限发出任务，发出即返回；会话出现在 ZCode 侧栏里',
       usage:
-        '参数 { workspace: string, prompt: string, report?: {id: string, callback: string, server: string} }。report 指定本轮唯一 id、接收命令和 MCP 服务名；自动附加 zcode.report 约定。workspace 是工作区目录的绝对路径。' +
-        '要求 ZCode 桌面端开着、只有一个工作区窗口。' +
+        '参数 { workspace: string, prompt: string }。workspace 是工作区目录的绝对路径。回报约定由发起方写进 prompt（执行端直报发起方的接收命令），本插件的命令不参与回报。' +
+        '要求 ZCode 桌面端开着、只有一个工作区窗口。同 workspace 同一时间只跑一轮：上一轮还没做完时这里直接报「workspace 已被会话 … 占用」（若上一轮其实已做完，会先自动释放再派）。' +
         SENT_SHAPE +
         '；taskId 留着给 zcode.status 与 zcode.send',
       effect: 'external',
     },
     async (raw) => {
-      const { workspace, prompt, report } = parseCreateArgs(raw)
+      const { workspace, prompt } = parseCreateArgs(raw)
       requireExistingDirectory('zcode.create', workspace)
       return withDesktop(warn, async (services) => {
+        await ensureWorkspaceFree(services, workspace, null)
         const taskId = await createTask(services, workspace)
+        occupancy.claim(workspace, taskId)
         log.info(`在 ${workspace} 新建会话 ${taskId}`)
-        const ticket = report === undefined ? null : await reports.prepare(report, workspace, taskId)
-        const content = report === undefined || ticket === null ? prompt : reports.prompt(prompt, report, ticket)
-        return { ok: true, data: await sendRound(services, { workspace, taskId, prompt: content }) }
+        return { ok: true, data: await sendRound(services, { workspace, taskId, prompt }) }
       })
     },
   )
@@ -96,18 +94,18 @@ export function apply(ctx: GwbContext): void {
       name: 'zcode.send',
       description: '在 ZCode 桌面端的一个已有会话里接着发指令（先切到完全访问），发出即返回',
       usage:
-        '参数 { workspace: string, task: string, prompt: string, report?: {id: string, callback: string, server: string} }。report 同 create。task 是 zcode.create 回执里的 taskId，workspace 写建它时的那个目录。' +
+        '参数 { workspace: string, task: string, prompt: string }。task 是 zcode.create 回执里的 taskId，workspace 写建它时的那个目录。同一会话续轮放行；同 workspace 被别的会话占着时报占用。' +
         SENT_SHAPE,
       effect: 'external',
     },
     async (raw) => {
-      const { workspace, task, prompt, report } = parseSendArgs(raw)
+      const { workspace, task, prompt } = parseSendArgs(raw)
       requireExistingDirectory('zcode.send', workspace)
       return withDesktop(warn, async (services) => {
+        await ensureWorkspaceFree(services, workspace, task)
+        occupancy.claim(workspace, task)
         log.info(`往会话 ${task} 发指令`)
-        const ticket = report === undefined ? null : await reports.prepare(report, workspace, task)
-        const content = report === undefined || ticket === null ? prompt : reports.prompt(prompt, report, ticket)
-        return { ok: true, data: await sendRound(services, { workspace, taskId: task, prompt: content }) }
+        return { ok: true, data: await sendRound(services, { workspace, taskId: task, prompt }) }
       })
     },
   )
@@ -119,7 +117,7 @@ export function apply(ctx: GwbContext): void {
       usage:
         `参数 { workspace: string, task: string, waitSeconds?: number, replyTailChars?: number }。waitSeconds 缺省 0 立即交回；给了就最多等这么久（不超过 ${MAX_WAIT_SECONDS}），做完就提前交回。` +
         'replyTailChars（正整数）给了就只交回回答末尾这么多个字符，缺省全部交回：ZCode 会把这一轮的工具调用记录也写进回答，一条就可能有几万字，超过 MCP 单次返回的上限时带上它。' +
-        '回 { taskId, title, status, mode, roundIsOver, replies, omittedReplyChars, fileChanges, pendingPermissions }：roundIsOver 为 true 才是做完了；' +
+        '回 { taskId, title, status, mode, roundIsOver, replies, omittedReplyChars, fileChanges, pendingPermissions }：roundIsOver 为 true 才是做完了，同时占用表放开这个工作区；' +
         'replies 是这一轮的回答（按出现顺序，最后一条是收尾的话）；omittedReplyChars 是按 replyTailChars 省掉的字符数，没省是 0；status 是 ZCode 的任务状态（completed / failed 等）；pendingPermissions 非空表示停在等人确认，去 ZCode 界面处理。' +
         '不改任何数据，但会按需打开 ZCode 主进程的本机调试端口；命令结束断开自己的连接，端口随 ZCode 退出关闭',
       effect: 'write',
@@ -129,6 +127,7 @@ export function apply(ctx: GwbContext): void {
       requireExistingDirectory('zcode.status', workspace)
       return withDesktop(warn, async (services) => {
         const round = await readRound(services, { workspace, taskId: task, waitSeconds })
+        if (round.roundIsOver) occupancy.release(workspace, task)
         const kept = replyTailChars === null ? { replies: round.replies, omittedReplyChars: 0 } : keepReplyTail(round.replies, replyTailChars)
         return { ok: true, data: { ...round, ...kept } }
       })
@@ -141,7 +140,7 @@ export function apply(ctx: GwbContext): void {
       description: '归档 ZCode 的一个会话：从侧栏的会话列表里收起来，记录不删',
       usage:
         '参数 { workspace: string, task: string }：task 是会话 id，workspace 写建它时的那个目录（目录已经删了也行，它只是 ZCode 记会话用的键）。' +
-        '还在跑（status 为 running）的会话直接报错，等这一轮做完再归档。' +
+        '还在跑（status 为 running）的会话直接报错，等这一轮做完再归档；归档同时放开这个工作区的占用。' +
         '归档后读回 ZCode 的已归档列表核对，回 { taskId, title, archived: true }；已经归档过的再调一次照样成功',
       effect: 'write',
     },
@@ -150,6 +149,7 @@ export function apply(ctx: GwbContext): void {
       const { workspace, task } = parseArchiveArgs(raw)
       return withDesktop(warn, async (services) => {
         const archived = await archiveTask(services, { workspace, taskId: task })
+        occupancy.release(workspace, task)
         log.info(`归档会话 ${task}`)
         return { ok: true, data: archived }
       })

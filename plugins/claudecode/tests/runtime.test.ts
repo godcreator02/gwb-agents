@@ -73,6 +73,13 @@ describe('Claude 原生进程会话', () => {
     await runtime.resolve({ workspace, sessionId: storedId, confirmedStopped: true })
     await expect(runtime.submit({ workspace, sessionId: storedId, prompt: '继续' }, true)).resolves.toMatchObject({ round: 2 })
   })
+  it('同工作区还有跑着或状态不明的会话时，新建会话被占用错误拒绝；结束后放行', async () => {
+    const { runtime, children } = setup({ version: 1, sessions: [{ sessionId: storedId, workspace, round: 1, status: 'running', text: '' }] })
+    await expect(runtime.submit({ workspace, prompt: '第二单' }, false)).rejects.toThrow(`workspace 已被会话 ${storedId} 占用`)
+    expect(children).toHaveLength(0)
+    await runtime.resolve({ workspace, sessionId: storedId, confirmedStopped: true })
+    await expect(runtime.submit({ workspace, prompt: '再试' }, false)).resolves.toMatchObject({ accepted: true })
+  })
   it('存储失败不启动进程，后续请求保持失败', async () => {
     const { runtime, deps, children } = setup()
     deps.write = async () => { throw new Error('disk unavailable') }

@@ -14,7 +14,7 @@ description: 本机原生 CLI 会话的创建、续聊、事件状态和恢复�
 
 | 命令 | 参数 | 作用 |
 | --- | --- | --- |
-| `claudecode.create` | `{workspace,prompt}` | 新建 UUID 会话，返回 `{sessionId,round,accepted:true}` |
+| `claudecode.create` | `{workspace,prompt}` | 新建 UUID 会话，返回 `{sessionId,round,accepted:true}`。同工作区还有跑着或状态不明的会话时报「workspace 已被会话 … 占用」 |
 | `claudecode.send` | `{workspace,sessionId,prompt}` | 等待本插件上一轮进程退出，再用原生 resume 续聊 |
 | `claudecode.status` | `{workspace,sessionId}` | 读取进程事件保存的状态；不代表 QQ 已送达 |
 | `claudecode.resolve` | `{workspace,sessionId,confirmedStopped:true}` | 人工核对停止后解除重载留下的 unknown 状态 |
@@ -23,7 +23,7 @@ description: 本机原生 CLI 会话的创建、续聊、事件状态和恢复�
 
 {/* ref file="../plugins/claudecode/src/index.ts" hash="58e8500b5f41" blob="0abc5955c5b0" */}
 
-{/* ref file="../plugins/claudecode/src/runtime.ts" hash="ad8b658fc6ae" blob="c4005ae7a349" */}
+{/* ref file="../plugins/claudecode/src/runtime.ts" hash="066948e1c8c6" blob="3c3aa828907f" */}
 
 ## 依赖与接缝
 

@@ -1,7 +1,7 @@
 {
   "name": "@godcreator/gwb-claudecode",
-  "version": "0.2.1",
-  "description": "Claude Code 原生 CLI 会话：创建、续聊、事件状态与人工恢复；应用自行接收回报。",
+  "version": "0.3.0",
+  "description": "Claude Code 原生 CLI 会话：创建、续聊、事件状态与人工恢复；同工作区同一时间只跑一轮，回报由发起方直报。",
   "type": "module",
   "exports": {
     ".": "./dist/index.js"
@@ -40,5 +40,8 @@
     "oxlint-tsgolint": "7.0.2001",
     "typescript": "^7.0.2",
     "vitest": "^4.1.10"
+  },
+  "dependencies": {
+    "@godcreator/gwb-report-contract": "workspace:*"
   }
 }

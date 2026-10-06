@@ -2,6 +2,7 @@ import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process'
 import { randomUUID } from 'node:crypto'
 import { stat } from 'node:fs/promises'
 import path from 'node:path'
+import { workspaceOccupiedMessage } from '@godcreator/gwb-report-contract'
 
 export interface Session { sessionId: string; workspace: string; round: number; status: 'running' | 'completed' | 'failed' | 'unknown'; text: string }
 export interface RuntimeDeps { executable(): string; read(): Promise<unknown>; write(value: unknown): Promise<void>; error(message: string): void }
@@ -61,6 +62,11 @@ export class ClaudeRuntime {
       if (this.closing) throw new Error('Claude 插件正在卸载')
       const current: Session = resume ? this.find(args.workspace, args.sessionId!) : { sessionId: randomUUID(), workspace: args.workspace, round: 0, status: 'completed', text: '' }
       if (this.children.has(current.sessionId) || current.status === 'running' || current.status === 'unknown') throw new Error('上一轮仍执行中或状态不明，不能续发')
+      // 同 workspace 同一时间只跑一轮：别的会话还在跑（或重载后状态不明未人工核对）就拒绝新会话
+      if (!resume) {
+        const holder = this.sessions.find((s) => workspaceKey(s.workspace) === workspaceKey(args.workspace) && (s.status === 'running' || s.status === 'unknown'))
+        if (holder !== undefined) throw new Error(workspaceOccupiedMessage(holder.sessionId))
+      }
       if (!resume) this.sessions.push(current)
       current.round++; current.status = 'running'; current.text = ''; await this.save(); return current
     })

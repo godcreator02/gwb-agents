@@ -1,6 +1,6 @@
 ---
 name: zcode
-description: 要把任务交给本机的 ZCode（另一个 AI 客户端，走 GLM 额度）去做时读：批量迁移、批量改代码这类能写清范围的任务。讲 zcode.open / create / send / status / archive 怎么用、任务说明怎么写、怎么查询与主动回报结果、做完怎么复查与归档。
+description: 要把任务交给本机的 ZCode（另一个 AI 客户端，走 GLM 额度）去做时读：批量迁移、批量改代码这类能写清范围的任务。讲 zcode.open / create / send / status / archive 怎么用、任务说明怎么写、怎么查询结果、做完怎么复查与归档。
 ---
 
 # 给 ZCode 派任务
@@ -50,12 +50,11 @@ ZCode 说「做完了」不算数：自己跑一次它说跑过的检查，`git 
 遇到连接断开或请求超时，发送可能已经完成，先核对侧栏或已知会话的 `zcode.status`，不要直接重发任务。
 
 
-## 给常驻通道主动回报
+## 同工作区同一时间只跑一轮
 
-QQ 与协作站派单在 create / send 中附加可选 `report: {id, callback, server}`：每轮唯一 id、已经登记的接收命令、ZCode 内指向派单 home 的 MCP 服务名。插件生成随机 ticket，保存到本 home 的 gwb-data，并自动把回报约定附到提示词。
+create / send 前插件先查占用：这个工作区上一轮还没做完时直接报「workspace 已被会话 … 占用」（错误信息带占用中的 taskId）；上一轮其实已做完的会先自动释放再派，不依赖调用方先查。`zcode.status` 读到 `roundIsOver` 为 true、或 `zcode.archive` 之后，占用放开。
+插件重载后占用表是空的（第一条派单放行）；zcode 与 claudecode 各记各的，不共表。
 
-执行者在最终答复前经指定服务调用 `zcode.report {ticket,state,text}`。state 为 completed、failed 或 needs_input；text 是给发起人的结果摘要，最多 16000 字符。同票相同结果可重交，不同结果拒绝覆盖。ticket 只用于本轮回报，不写进 QQ、笔记或仓库。
+## 回报不经过本插件
 
-回执 recorded 表示已落盘，accepted 表示接收命令已成功接收；不代表 QQ 已送达或 ZCode 进程已停。接收插件加载时调内部 `zcode.report.replay {callback}` 补交未接收结果，无定时轮询。未带 report 的普通调用保留原有 status 查询方式。
-
-不要把不同 home 的入口混用；无法回报时保留同一 ticket 重试报告，不重复执行工作。桌面端崩溃或未调用 report 时只表示尚未回报，不能宣告完成。
+QQ 与协作站这类常驻发起方自己签票据、把直报约定写进任务说明，执行端在最终答复前经 MCP 入口直接调用发起方的接收命令（如 `qq-bot.report`）——本插件的五条命令不参与回报，也不保存任何票据。校验与幂等判定的共享协议在 `@godcreator/gwb-report-contract`。发起方是谁读谁的说明书；这里只管派单与查询。

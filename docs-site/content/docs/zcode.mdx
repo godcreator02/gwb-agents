@@ -26,16 +26,16 @@ ZCode 插件对应包 `@godcreator/gwb-zcode`（`plugins/zcode/`，入口 `src/i
 agent 经 MCP 入口 `run` 调命令，参数形状写在登记时的 `usage` 里。参数只在这一层校验，认不出的键直接报错——比如多给一个
 `mode` 不会被悄悄忽略，权限只有完全访问一种：
 
-{/* ref file="../plugins/zcode/src/args.ts" lines="31-38" hash="a79674b46996" blob="9c17752a7371" */}
+{/* ref file="../plugins/zcode/src/args.ts" lines="29-36" hash="a79674b46996" blob="dad04a3d67e9" */}
 
 `workspace` 要是已存在目录的绝对路径，这一条在登记命令的地方查（它要读磁盘）；`zcode.archive` 不查目录在不在，目录删了的旧会话也要能收起来：
 
-{/* ref file="../plugins/zcode/src/index.ts" lines="24-26" hash="a3bef6297dfa" blob="e7d20e92e580" */}
+{/* ref file="../plugins/zcode/src/index.ts" lines="23-25" hash="a3bef6297dfa" blob="901c736691f0" */}
 
 **没有一条命令会一直等到 ZCode 做完。**MCP 客户端等一次调用有上限，Claude Code 是 300 秒没有动静就放弃，而 ZCode 干一个活常常超过这个时间。
 所以 `create` / `send` 发出就返回，`status` 的 `waitSeconds` 最多 240 秒、做完提前交回，agent 隔一阵问一次（轨迹卡[「发出即返回」](/trajectory/2026-10-02-dispatch-then-poll)）：
 
-{/* ref file="../plugins/zcode/src/args.ts" lines="6-7" hash="6cd8bf19180a" blob="9c17752a7371" */}
+{/* ref file="../plugins/zcode/src/args.ts" lines="5-6" hash="6cd8bf19180a" blob="dad04a3d67e9" */}
 
 测试：`tests/args.test.ts`。
 
@@ -174,8 +174,8 @@ peer 写法在[插件之间怎么连](/docs/wiring)。
 - **`zcode.create` 不替调用方切工作区**：切窗口会打断人正在看的界面，要不要切由调用方用 `zcode.open` 决定
 
 
-## 主动回报
+## 同工作区互斥与回报的边界
 
-常驻调用方给 create / send 传 report，插件在派发之前保存本轮凭证并附加回报约定。执行者调用 zcode.report 后，先保存结果、再经命令总线调用预先登记的接收命令。MCP 仍只暴露 index / search / run；本插件没有新增网络服务。
+同 workspace 同一时间只跑一轮：`create` / `send` 先查占用，被别的会话占着就报错（错误信息带占用中的 taskId），上一轮其实已做完的先自动释放再派；`status` 读到 `roundIsOver` 或 `archive` 后放开。占用表在插件进程内存里——插件重载后为空、与 claudecode 各记各的，这两点是已知边界；跨执行端的共表等出现真实的跨端同目录并发问题再做（方案与触发信号见接缝图集的 agent 派单架构篇）。
 
-持久化与重复提交边界由 `src/reports.ts` 的 ReportBook 管理，测试 `tests/reports.test.ts` 覆盖错误 home、重复、接收方离线与重载补交。结果回报不是 ZCode 进程退出信号；未回报时按需查询 status。给 QQ 和协作站的回报路径不安排周期 status 查询。
+回报不经本插件：常驻发起方（QQ、协作站）自己签票据、把直报约定写进任务说明，执行端经 MCP 入口直报发起方的接收命令；票据的校验与幂等判定共用 `@godcreator/gwb-report-contract`。本插件不保存票据、不转发结果、没有 replay 补交——不参与回报是「底层插件不知道上层业务」这条边界的直接体现。

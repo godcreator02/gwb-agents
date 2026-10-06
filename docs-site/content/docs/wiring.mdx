@@ -1,9 +1,9 @@
 ---
 title: 插件之间怎么连
-description: gwb-zcode 提供的命令与说明书，注入的服务与 peer 写法，和 ZCode 桌面端靠哪些约定通道连着
+description: gwb-zcode 提供的服务、命令与说明书，注入的服务与 peer 写法，和 ZCode 桌面端靠哪些约定通道连着
 ---
 
-**本页回答**：本仓插件提供哪些命令与说明书；注入了哪些服务、是必需还是局部注入、peer 怎么写；和 ZCode 桌面端靠哪些约定通道连着。
+**本页回答**：gwb-zcode 提供哪些服务、命令与说明书；注入了哪些服务、是必需还是局部注入、peer 怎么写；和 ZCode 桌面端靠哪些约定通道连着。
 
 ## @godcreator/gwb-zcode
 
@@ -11,10 +11,11 @@ description: gwb-zcode 提供的命令与说明书，注入的服务与 peer 写
 
 | 类别 | 名字 | 说明 |
 | --- | --- | --- |
-| 命令 | `zcode.open` / `zcode.create` / `zcode.send` / `zcode.status` / `zcode.archive` | 切 ZCode 窗口的工作区、派任务、读结果、归档会话，形状见[命令](/docs/commands) |
+| 服务 | `gwbZcode` | 本体：`open` / `create` / `send` / `status` / `archive`。别的插件 inject 它；类型在本包 `dist/index.d.ts`，给 cordis `Context` 补了这一项 |
+| 命令 | `zcode.open` / `zcode.create` / `zcode.send` / `zcode.status` / `zcode.archive` | 给 agent 的薄封装：只查参数形状、再调同名服务方法，形状见[命令](/docs/commands) |
 | 说明书 | `zcode` | 包根 `skills/zcode/`，经 `gwbSkills.register` 登记 |
 
-不提供服务、不注册窗格、不声明设置项。回报不经本插件（发起方签票据、执行端直报）；占用错误的措辞是跨插件约定（以「workspace 已被会话」开头），不是共享代码。
+不注册窗格、不声明设置项。不参与回报、不管占用，和上层应用之间没有任何约定的错误措辞。现在 inject `gwbZcode` 的是 qq-bot 与协作站各自的执行端适配层。
 
 ### 注入
 
@@ -23,11 +24,11 @@ description: gwb-zcode 提供的命令与说明书，注入的服务与 peer 写
 | `gwbCommands` | `@godcreator/gwb-commands` | 必需（顶层 `inject`） | `^0.6.0` | 登记命令 | 插件不加载 |
 | `gwbSkills` | `@godcreator/gwb-skills` | 局部注入 | `^0.4.7`，可选 | 登记说明书 `zcode` | 照常加载；agent 读不到说明书 |
 
-内核包 `@godcreator/gwb-kernel-desktop`（`^0.10.1`）只提供接口类型。
+内核包 `@godcreator/gwb-kernel-desktop`（`^0.10.1`）只提供接口类型；`cordis`（`^4.0.0-rc.10`）提供服务基类 `Service`，按值 import，所以写进 peer。
 
-{/* ref file="../plugins/zcode/src/index.ts" lines="16-16" hash="397a91e60cb0" blob="3da80ce2eeaa" */}
+{/* ref file="../plugins/zcode/src/index.ts" lines="32-32" hash="a929b23854d9" blob="2ab820cf079c" */}
 
-{/* ref file="../plugins/zcode/package.json" lines="30-40" hash="4689da6c52b5" blob="0eb0bf95cef6" */}
+{/* ref file="../plugins/zcode/package.json" lines="33-43" hash="606d18d13843" blob="6ac422534b9f" */}
 
 ### 按名字调用与约定通道
 

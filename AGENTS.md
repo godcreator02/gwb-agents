@@ -2,10 +2,9 @@
 
 这份 AGENTS.md 由 `docs-site/content/docs/outputs/agents.mdx` 生成：改那份正本，再运行 `pnpm doc:render`。
 
-本仓的 `plugins/zcode` 与 `plugins/claudecode` 是两个独立插件，各自维护命令、版本和依赖；QQ 与协作站保留应用自己的适配接口。
+本仓的 `plugins/zcode` 与 `plugins/claudecode` 是两个独立插件，各自维护服务、命令、版本和依赖；QQ 与协作站各自写执行端适配层接它们。
 
-ZCode 插件 `@godcreator/gwb-zcode`（`plugins/zcode/`）：经 ZCode 主进程的 Node 调试端口调 ZCode 客户端的服务，
-给 agent 五条命令：`zcode.open` 切窗口的工作区，`zcode.create` / `zcode.send` 派任务，`zcode.status` 读结果，`zcode.archive` 归档会话。
+ZCode 插件 `@godcreator/gwb-zcode`（`plugins/zcode/`）：经 ZCode 主进程的 Node 调试端口调 ZCode 客户端的服务。本体是服务 `gwbZcode`（`open` 切窗口的工作区，`create` / `send` 派任务，`status` 读结果，`archive` 归档会话），同名的 `zcode.*` 五条命令是给 agent 的薄封装。
 
 ## ZCode 约束
 
@@ -14,14 +13,15 @@ ZCode 插件 `@godcreator/gwb-zcode`（`plugins/zcode/`）：经 ZCode 主进程
 - **只做切工作区、派任务、查结果、归档**：不加取消任务、列会话、取消归档之类的命令，除非用户要；还在跑的会话不归档；`zcode.create` 不替调用方切工作区
 - **不用 ZCode CLI 无界面、不往 ZCode 的自动化表写行**：用户要侧栏看得见、不要绕路（理由见 `docs-site/content/trajectory/`）
 - **ZCode 的内部结构集中在 `src/desktop.ts` 与 `src/round.ts`**：React 树路径、服务方法名、模式值、启动参数。ZCode 升级后先核对文档站「插件之间怎么连」那张约定通道表
-- **命令名、参数形状、回执形状是给 agent 的契约**：改了同时改说明书正本 `content/docs/outputs/skills/zcode.mdx`
-- 参数只在命令入口校验，认不出的键直接报错
+- **服务名、方法与命令的参数、回执形状都是契约**：服务给 qq-bot 与协作站，命令给 agent；改了同时改说明书正本 `content/docs/outputs/skills/zcode.mdx`，按 gwb-release 判断升哪一位
+- **服务是本体、命令是薄封装**：命令只查参数形状（认不出的键直接报错）再调同名服务方法；取值的含义在服务方法里查，不另写一份实现
+- **不管占用、不参与回报**：同一个工作区可以并行；回报由派任务的一方写进提示词，插件不认识任何上层应用
 
 ## Claude Code 约束
 
 - 实现在 `plugins/claudecode/`；使用原生 CLI 与本机登录、MCP 和纪律 hooks。
-- 进程 result 事件更新本插件状态；应用回报由调用方指定，不把 QQ 的来源与凭证装进原生插件。
-- 重载后未确认结束的会话保持 unknown；核对停止后才能恢复，不自动重发。
+- 本体是服务 `gwbClaudecode`（`create` / `send` / `status`），`claudecode.*` 命令是薄封装；进程 result 事件更新本插件状态，回答原样保存。
+- 插件卸载或工作台没正常退出中断的轮次一律记 failed，没有「状态不明」，不自动重发。
 
 ## 怎么跑
 

@@ -1,42 +1,50 @@
 ---
 title: Claude Code 插件
-description: 本机原生 CLI 会话的创建、续聊、事件状态和恢复边界
+description: 服务 gwbClaudecode：本机原生 CLI 会话的创建、续聊与进程事件保存的状态；claudecode.* 命令是它给 agent 的薄封装
 ---
 
-**本页回答**：`plugins/claudecode` 的本地实现负责什么，以及真实回报的验收边界。
+**本页回答**：`plugins/claudecode` 负责什么、对外给什么、依赖谁，以及刻意不做的事。
 
 ## 功能
 
-创建本机 Claude Code 原生 CLI 进程，用 stdin 提交提示词，用流式 JSON 的 result 事件保存本轮状态。
-命令发出后返回会话 ID，结果到达不靠定时轮询。隔离 home 已实测原生模型调用 `qq-bot.report`，结果保存并送达原群；重载、重复回报与窗口边界仍由 QQ 插件处理。
+每一轮启动一个本机 Claude Code 原生 CLI 进程（`claude -p`），用 stdin 交提示词，从流式 JSON 里只认这条会话的 `result` 一行当这一轮的回答，进程退出就是这一轮结束。
+启动后立即交回会话 ID，结果到达不靠定时轮询。同一个工作区可以同时开几条会话。
 
 ## 接口
 
-| 命令 | 参数 | 作用 |
+本体是服务 `gwbClaudecode`，别的插件 inject 它调方法；`claudecode.*` 命令给 agent 用，只查参数形状、再调同名方法。类型在本包 `src/api.ts`：
+
+{/* ref file="../plugins/claudecode/src/api.ts" lines="37-48" hash="53b8a37086d0" blob="716910530c3d" */}
+
+| 方法 / 命令 | 参数 | 作用 |
 | --- | --- | --- |
-| `claudecode.create` | `{workspace,prompt}` | 新建 UUID 会话，返回 `{sessionId,round,accepted:true}`。同工作区还有跑着或状态不明的会话时报「workspace 已被会话 … 占用」 |
-| `claudecode.send` | `{workspace,sessionId,prompt}` | 等待本插件上一轮进程退出，再用原生 resume 续聊 |
-| `claudecode.status` | `{workspace,sessionId}` | 读取进程事件保存的状态；不代表 QQ 已送达 |
-| `claudecode.resolve` | `{workspace,sessionId,confirmedStopped:true}` | 人工核对停止后解除重载留下的 unknown 状态 |
+| `create` / `claudecode.create` | `{workspace,prompt}` | 新建 UUID 会话并启动第一轮，返回 `{sessionId,round,accepted:true}`，只表示进程启动了 |
+| `send` / `claudecode.send` | `{workspace,sessionId,prompt}` | 等这条会话上一轮的进程退出，再用原生 `--resume` 续一轮 |
+| `status` / `claudecode.status` | `{workspace,sessionId}` | 读进程事件保存的状态：`running` 以外都是这一轮结束了，`completed` 带最终回答，`failed` 带原因 |
 
-工作区必须为绝对路径；续聊与查询只认本 home、同工作区的会话。参数与命令的正本在本包 `src/index.ts`、`src/runtime.ts`。
+工作区必须是绝对路径；续聊与查询只认本 home、同一个工作区的会话。
 
-{/* ref file="../plugins/claudecode/src/index.ts" hash="58e8500b5f41" blob="0abc5955c5b0" */}
+**中断的轮次一律记失败，没有「状态不明」**：插件卸载时结束在跑的进程，那一轮记 `failed`；上次工作台没正常退出、记录里留着的 `running`，读回时同样按中断失败收尾，之后可以照常续聊：
 
-{/* ref file="../plugins/claudecode/src/runtime.ts" hash="efc10fbb6d5a" blob="4321e8b029d9" */}
+{/* ref file="../plugins/claudecode/src/runtime.ts" lines="36-45" hash="3ec10f789f69" blob="5a37bc46302d" */}
 
-## 依赖与接缝
+测试：`tests/runtime.test.ts`。
 
-| 接缝 | 归属 |
-| --- | --- |
-| 提供服务 | 不提供共享服务；只登记 `claudecode.*` 命令 |
-| 注入 `gwbCommands` | 登记命令 |
-| 注入 `gwbSettings` | 本插件 `executable` 设置，指向原生 exe |
-| 注入 `gwbData` | 本 home 的 `sessions` 文档保存进程状态 |
-| 外部进程 | 本机 Claude Code；新建和续聊均使用 `--permission-mode bypassPermissions`，仍加载现有登录、MCP 和纪律 hooks |
-| 业务回报 | 由调用方在任务里指定；QQ 接收 `qq-bot.report`，本插件不代替它保存回报凭证 |
+## 依赖
+
+| 依赖 | 用来做什么 | 缺了会怎样 |
+| --- | --- | --- |
+| 命令总线 `gwbCommands`（必需） | 登记三条命令 | 插件不加载 |
+| 设置 `gwbSettings`（必需） | 本插件 `executable` 设置，指向原生 exe | 插件不加载 |
+| 数据 `gwbData`（必需） | 本 home 的 `sessions` 文档保存会话状态 | 插件不加载 |
+| `cordis` | 服务基类 `Service` | — |
+| 本机 Claude Code | 新建和续聊都用 `--permission-mode bypassPermissions`，仍加载现有登录、MCP 和纪律 hooks | 启动时报「请配置本机 Claude Code 原生 exe 绝对路径」 |
+
+{/* ref file="../plugins/claudecode/src/index.ts" lines="19-19" hash="f3e25754b611" blob="18b4a3c757fc" */}
 
 ## 不做的事
 
-不接管 QQ 来源、群回复地址、协作站任务或日志库；不将进程启动当成业务完成。权限模式按用户授权固定为 `bypassPermissions`，不改全局配置。
-重载后未确认结束的会话保留 unknown，不自动重发任务。
+- **不管占用**：同一个工作区开几条会话由调用方决定（轨迹卡[「删掉占用表」](/trajectory/2026-10-07-drop-workspace-occupancy)）
+- **不参与回报**：要不要回报、报给谁由派任务的一方写进提示词；本插件不认识任何上层应用、不保存凭证，回答原样保存
+- **不自动重发**：中断的轮次记失败，由调用方决定要不要再派
+- **不把进程启动当成任务完成**；权限模式按用户授权固定为 `bypassPermissions`，不改全局配置

@@ -1,10 +1,13 @@
 {
   "name": "@godcreator/gwb-zcode",
   "version": "0.3.1",
-  "description": "给运行中的 ZCode 桌面端派任务：切工作区、新建或续聊、完全访问、发出即返回；同工作区同一时间只跑一轮，回报由发起方直报、本插件不参与。公开命令 5 条；skill 1 份。",
+  "description": "给运行中的 ZCode 桌面端派任务：服务 gwbZcode 切工作区、新建或续聊、完全访问、发出即返回、读最新一轮、归档；zcode.* 命令是它给 agent 的薄封装。",
   "type": "module",
   "exports": {
-    ".": "./dist/index.js"
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
   },
   "files": [
     "dist",
@@ -21,7 +24,7 @@
     "registry": "https://git.tianshen02.online:28377/api/packages/godcreator/npm/"
   },
   "scripts": {
-    "build": "node build.ts",
+    "build": "node build.ts && tsc -p tsconfig.build.json",
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "lint": "oxlint . --deny-warnings",
     "test": "vitest run --passWithNoTests",
@@ -30,7 +33,8 @@
   "peerDependencies": {
     "@godcreator/gwb-commands": "^0.6.0",
     "@godcreator/gwb-kernel-desktop": "^0.10.1",
-    "@godcreator/gwb-skills": "^0.4.7"
+    "@godcreator/gwb-skills": "^0.4.7",
+    "cordis": "^4.0.0-rc.10"
   },
   "peerDependenciesMeta": {
     "@godcreator/gwb-skills": {

@@ -3,25 +3,24 @@ title: gwb-agents
 description: 在同一仓库开发 ZCode 与 Claude Code 两个独立 agent 插件
 ---
 
-**本页回答**：两个 agent 插件怎么放在一起开发，哪些边界仍各自拥有；它们与上层应用（QQ、协作站）之间有哪些纯约定。
+**本页回答**：两个 agent 插件怎么放在一起开发，哪些边界仍各自拥有；上层应用（QQ、协作站）怎么接上它们。
 
 ## 两个独立插件
 
 | 目录 | 发布包 | 接入方式 | 说明 |
 | --- | --- | --- | --- |
-| `plugins/zcode` | `@godcreator/gwb-zcode` | ZCode 桌面端内部服务 | [ZCode 插件](/docs/zcode) |
-| `plugins/claudecode` | `@godcreator/gwb-claudecode` | Claude Code 原生 CLI 进程 | [Claude Code 插件](/docs/claudecode) |
+| `plugins/zcode` | `@godcreator/gwb-zcode` | 服务 `gwbZcode`，经 ZCode 桌面端内部服务实现 | [ZCode 插件](/docs/zcode) |
+| `plugins/claudecode` | `@godcreator/gwb-claudecode` | 服务 `gwbClaudecode`，每轮一个 Claude Code 原生 CLI 进程 | [Claude Code 插件](/docs/claudecode) |
 
 两个插件共用仓库、pnpm workspace、锁文件和文档站。每个包保留自己的版本、依赖、命令与测试，可以单独安装、构建和发布。
 
-与上层应用之间没有共享代码，只有两条纯约定，各自实现、靠文档同步（正本在接缝图集 uxje5-gwb-seams 的 agent 派单架构篇）：占用错误的措辞以「workspace 已被会话 … 占用」开头；直报回报的票据是 64 位十六进制、state 三枚举、正文 1–16000 且不含票据。第三本任务簿出现且校验开始漂移时，才考虑把校验抽成共享包。
+每个插件只管把自己那个 agent 做好：本体是一个 cordis 服务，形状按那个执行端最自然的样子定，两个插件之间不对齐；同名命令是给进程外 agent 的薄封装。插件不管占用、不参与回报，和上层应用之间没有约定的错误措辞或凭证格式。
 
 {/* ref file="../pnpm-workspace.yaml" hash="8a44a5c0549a" blob="1d45833ee151" */}
 
 ## 应用接缝
 
-QQ bot 留在 `gwb-qq-bot` 仓，拥有聊天来源、项目与日志绑定、QQ 回报凭证和送达记录；它按自己的需求适配两种原生命令。
-协作站拥有自己的派单接口。这里不增加公共业务队列、统一任务账本或 dispatch 插件。
+上层应用各自写执行端适配层：qq-bot 的 `executors/` inject `gwbZcode` 与 `gwbClaudecode`，协作站的 `ai-handling.ts` inject `gwbZcode`；接口由应用自己按需要定、互不统一。这里不增加公共业务队列、统一任务账本或派单插件。整体的接缝图在接缝图集 uxje5-gwb-seams 的派单架构篇。
 
 ZCode 的 `taskId` 与 Claude Code 的 `sessionId` 分别属于各自的原生会话；切换 agent 时由调用方创建新的会话，不跨软件复用上下文 ID。
 
@@ -31,4 +30,3 @@ ZCode 的 `taskId` 与 Claude Code 的 `sessionId` 分别属于各自的原生�
 文档站单独安装依赖，运行 `pnpm doc:render` 与 `pnpm doc`。实验材料留在仓根 `probes/`，不加入 workspace。
 
 隔离 home 安装时，`devkit.dev` 的 `dir` 指向本仓，`packages` 可以选 `["plugins/zcode","plugins/claudecode"]` 或其中一个。
-迁入同仓不代表新功能已通过实机验证；Claude Code 与 QQ 的 B 回报链路仍在联调。

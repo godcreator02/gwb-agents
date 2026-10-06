@@ -9,10 +9,10 @@ description: 仓根 README.md 的正本
 
 | 目录 | 包 | 原生入口 |
 | --- | --- | --- |
-| `plugins/zcode/` | `@godcreator/gwb-zcode` | ZCode 桌面端：打开工作区、创建、续聊、查询、归档与主动回报 |
-| `plugins/claudecode/` | `@godcreator/gwb-claudecode` | Claude Code 原生 CLI：创建、续聊、状态与人工恢复，固定 bypassPermissions |
+| `plugins/zcode/` | `@godcreator/gwb-zcode` | 服务 `gwbZcode`：ZCode 桌面端的打开工作区、创建、续聊、查询、归档 |
+| `plugins/claudecode/` | `@godcreator/gwb-claudecode` | 服务 `gwbClaudecode`：Claude Code 原生 CLI 的创建、续聊、状态，固定 bypassPermissions |
 
-各插件保留自己的命令、依赖、版本和安装入口。QQ bot 独立于本仓，调用方按自己的业务需求适配原生命令。
+各插件保留自己的服务、命令、依赖、版本和安装入口。别的插件 inject 服务，agent 用同名命令（服务方法的薄封装）；QQ bot 与协作站独立于本仓，各自写执行端适配层接这两个服务。
 
 ## 开发
 

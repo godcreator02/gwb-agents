@@ -1,26 +1,6 @@
-import path from 'node:path'
+import type { ZcodeCreateInput, ZcodeSendInput, ZcodeStatusInput, ZcodeTaskInput, ZcodeWorkspaceInput } from './api.js'
 
-/** 各命令的参数校验：认不出的键直接报错，不静默忽略 */
-
-/** MCP 客户端等一次调用有上限（Claude Code 是 300 秒没动静就放弃），zcode.status 的等待留出余量 */
-export const MAX_WAIT_SECONDS = 240
-
-export interface CreateArgs {
-  workspace: string
-  prompt: string
-}
-
-export interface SendArgs extends CreateArgs {
-  task: string
-}
-
-export interface StatusArgs {
-  workspace: string
-  task: string
-  waitSeconds: number
-  /** 只交回回答末尾这么多个字符；null 是全部交回 */
-  replyTailChars: number | null
-}
+/** 命令参数的形状校验：认不出的键直接报错，不静默忽略；取值的含义（绝对路径、等待上限）由服务方法自己查 */
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
@@ -40,63 +20,58 @@ function requireNonEmptyString(commandName: string, key: string, value: unknown,
   return value
 }
 
-function workspacePath(commandName: string, value: unknown): string {
-  const workspace = requireNonEmptyString(commandName, 'workspace', value, '工作区目录的绝对路径')
-  if (!path.win32.isAbsolute(workspace)) throw new Error(`${commandName} 的 workspace 要是绝对路径，收到 ${workspace}`)
-  return workspace
+function optionalNumber(commandName: string, key: string, value: unknown): number | undefined {
+  if (value === undefined) return undefined
+  if (typeof value !== 'number') throw new Error(`${commandName} 的 ${key} 要是数，收到 ${JSON.stringify(value)}`)
+  return value
 }
 
+const WORKSPACE_MEANING = '工作区目录的绝对路径'
 const TASK_MEANING = 'zcode.create 回执里的 taskId（sess_ 开头）'
 
-export function parseCreateArgs(raw: unknown): CreateArgs {
+export function parseOpenArgs(raw: unknown): ZcodeWorkspaceInput {
+  const commandName = 'zcode.open'
+  const obj = objectArgs(commandName, raw, ['workspace'])
+  return { workspace: requireNonEmptyString(commandName, 'workspace', obj['workspace'], WORKSPACE_MEANING) }
+}
+
+export function parseCreateArgs(raw: unknown): ZcodeCreateInput {
   const commandName = 'zcode.create'
   const obj = objectArgs(commandName, raw, ['workspace', 'prompt'])
   return {
-    workspace: workspacePath(commandName, obj['workspace']),
+    workspace: requireNonEmptyString(commandName, 'workspace', obj['workspace'], WORKSPACE_MEANING),
     prompt: requireNonEmptyString(commandName, 'prompt', obj['prompt'], '发给 ZCode 的任务说明'),
   }
 }
 
-export function parseSendArgs(raw: unknown): SendArgs {
+export function parseSendArgs(raw: unknown): ZcodeSendInput {
   const commandName = 'zcode.send'
   const obj = objectArgs(commandName, raw, ['workspace', 'task', 'prompt'])
   return {
-    workspace: workspacePath(commandName, obj['workspace']),
+    workspace: requireNonEmptyString(commandName, 'workspace', obj['workspace'], WORKSPACE_MEANING),
     task: requireNonEmptyString(commandName, 'task', obj['task'], TASK_MEANING),
     prompt: requireNonEmptyString(commandName, 'prompt', obj['prompt'], '发给 ZCode 的指令'),
   }
 }
 
-export function parseOpenArgs(raw: unknown): { workspace: string } {
-  const commandName = 'zcode.open'
-  const obj = objectArgs(commandName, raw, ['workspace'])
-  return { workspace: workspacePath(commandName, obj['workspace']) }
+export function parseStatusArgs(raw: unknown): ZcodeStatusInput {
+  const commandName = 'zcode.status'
+  const obj = objectArgs(commandName, raw, ['workspace', 'task', 'waitSeconds', 'replyTailChars'])
+  const waitSeconds = optionalNumber(commandName, 'waitSeconds', obj['waitSeconds'])
+  const replyTailChars = optionalNumber(commandName, 'replyTailChars', obj['replyTailChars'])
+  return {
+    workspace: requireNonEmptyString(commandName, 'workspace', obj['workspace'], WORKSPACE_MEANING),
+    task: requireNonEmptyString(commandName, 'task', obj['task'], TASK_MEANING),
+    ...(waitSeconds === undefined ? {} : { waitSeconds }),
+    ...(replyTailChars === undefined ? {} : { replyTailChars }),
+  }
 }
 
-export function parseArchiveArgs(raw: unknown): { workspace: string; task: string } {
+export function parseArchiveArgs(raw: unknown): ZcodeTaskInput {
   const commandName = 'zcode.archive'
   const obj = objectArgs(commandName, raw, ['workspace', 'task'])
   return {
-    workspace: workspacePath(commandName, obj['workspace']),
+    workspace: requireNonEmptyString(commandName, 'workspace', obj['workspace'], WORKSPACE_MEANING),
     task: requireNonEmptyString(commandName, 'task', obj['task'], TASK_MEANING),
-  }
-}
-
-export function parseStatusArgs(raw: unknown): StatusArgs {
-  const commandName = 'zcode.status'
-  const obj = objectArgs(commandName, raw, ['workspace', 'task', 'waitSeconds', 'replyTailChars'])
-  const waitSeconds = obj['waitSeconds'] ?? 0
-  if (typeof waitSeconds !== 'number' || !Number.isFinite(waitSeconds) || waitSeconds < 0 || waitSeconds > MAX_WAIT_SECONDS) {
-    throw new Error(`${commandName} 的 waitSeconds 要是 0 到 ${MAX_WAIT_SECONDS} 之间的数（秒），收到 ${JSON.stringify(obj['waitSeconds'])}`)
-  }
-  const replyTailChars = obj['replyTailChars'] ?? null
-  if (replyTailChars !== null && (typeof replyTailChars !== 'number' || !Number.isInteger(replyTailChars) || replyTailChars < 1)) {
-    throw new Error(`${commandName} 的 replyTailChars 要是正整数（字符数），收到 ${JSON.stringify(obj['replyTailChars'])}`)
-  }
-  return {
-    workspace: workspacePath(commandName, obj['workspace']),
-    task: requireNonEmptyString(commandName, 'task', obj['task'], TASK_MEANING),
-    waitSeconds,
-    replyTailChars,
   }
 }

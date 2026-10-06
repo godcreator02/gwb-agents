@@ -4,8 +4,8 @@
  */
 
 export const modules = [
-  { id: 'agent', title: 'agent', lines: ['经 MCP 入口 run 调命令'], x: 20, y: 20, w: 200, h: 72, color: '#ffd23f' },
-  { id: 'plugin', title: 'gwb 插件 gwb-zcode', lines: ['工作台主进程里', 'zcode.open / create / send', 'zcode.status / archive', '切工作区·发指令·读结果·归档'], x: 300, y: 20, w: 260, h: 124, color: '#7bdff2' },
+  { id: 'agent', title: '调用方', lines: ['别的插件：inject gwbZcode', 'agent：经 MCP 入口', 'run 调 zcode.* 命令'], x: 20, y: 20, w: 200, h: 92, color: '#ffd23f' },
+  { id: 'plugin', title: 'gwb 插件 gwb-zcode', lines: ['服务 gwbZcode（本体）', 'open / create / send', 'status / archive', 'zcode.* 命令是薄封装'], x: 300, y: 20, w: 260, h: 124, color: '#7bdff2' },
   { id: 'skills', title: '说明书插件', lines: ['登记说明书 zcode'], x: 640, y: 20, w: 200, h: 72, color: '#e0e0e0' },
   { id: 'processes', title: 'Windows 进程表', lines: ['pwsh Get-CimInstance', '找唯一的 ZCode 主进程'], x: 20, y: 214, w: 200, h: 86, color: '#f6f5ae' },
   { id: 'main', title: 'ZCode 主进程', lines: ['Electron 的 Node', '调试端口 127.0.0.1:9229'], x: 300, y: 214, w: 260, h: 86, color: '#b2f7b1' },
@@ -20,8 +20,8 @@ export const seams = [
     from: [220, 56],
     to: [300, 56],
     label: [258, 44],
-    title: 'agent → 插件',
-    text: 'agent 经 MCP 入口 run 调 zcode.open / create / send / status / archive；认不出的参数、相对路径、不存在的目录直接报错。派任务的两条发出即返回，status 最多等 240 秒，不碰 MCP 客户端 300 秒的上限。',
+    title: '调用方 → 插件',
+    text: '别的插件 inject 服务 gwbZcode 调 open / create / send / status / archive；agent 经 MCP 入口 run 调同名的 zcode.* 命令，命令只查参数形状（认不出的键直接报错），再调同一个方法。相对路径、不存在的目录在方法里报错。派任务的两个方法发出即返回，status 最多等 240 秒，不碰 MCP 客户端 300 秒的上限。',
   },
   {
     n: 2,
@@ -37,7 +37,7 @@ export const seams = [
     to: [410, 214],
     label: [390, 180],
     title: '插件 → 主进程（调试端口）',
-    text: '端口没开就 process._debugProcess(pid) 打开它，经 WebSocket 发 Runtime.evaluate；核对端口属于这个 pid。几条命令共用一个连接，最后一条结束才关端口。',
+    text: '端口没开就 process._debugProcess(pid) 打开它，经 WebSocket 发 Runtime.evaluate；核对端口属于这个 pid。同一 home 同时在跑的几次调用共用一个连接，最后一次结束只断开自己的连接，端口随 ZCode 退出关闭。',
   },
   {
     n: 4,
@@ -61,7 +61,7 @@ export const seams = [
     to: [640, 56],
     label: [600, 44],
     title: '插件 → 说明书插件',
-    text: '局部注入 gwbSkills，登记包里的 skills/ 目录；没装说明书插件时命令照常可用，只是 agent 读不到说明书。',
+    text: '局部注入 gwbSkills，登记包里的 skills/ 目录；没装说明书插件时服务与命令照常可用，只是 agent 读不到说明书。',
   },
   {
     n: 7,

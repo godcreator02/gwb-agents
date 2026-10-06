@@ -1,6 +1,6 @@
 ---
 title: gwb-zcode
-description: 让 agent 经 gwb 工作台给运行中的 ZCode 桌面端派任务：把窗口切到要用的工作区，新建会话或在已有会话里接着发指令，一律完全访问，发出即返回、按需查询或主动回报结果，会话出现在 ZCode 侧栏里。本页按接缝讲插件怎么连到 ZCode 的任务服务
+description: 让别的插件（服务 gwbZcode）与 agent（zcode.* 命令）给运行中的 ZCode 桌面端派任务：把窗口切到要用的工作区，新建会话或在已有会话里接着发指令，一律完全访问，发出即返回、按需查询结果，会话出现在 ZCode 侧栏里。本页按接缝讲插件怎么连到 ZCode 的任务服务
 ---
 
 **本页回答**：这个插件做什么、它和 agent、ZCode 桌面端之间的每条接缝传什么、由谁负责、怎么测，以及它刻意不做什么。
@@ -10,10 +10,10 @@ ZCode 没有给外部用的建任务入口：启动参数与深链接只能打�
 自己的服务。所以这个插件打开 ZCode 主进程的 Node 调试端口，在窗口里执行脚本调这些服务——
 这条路怎么找到的、为什么不用 CLI 无界面或定时自动化，见轨迹区。
 
-ZCode 插件对应包 `@godcreator/gwb-zcode`（`plugins/zcode/`，入口 `src/index.ts`），派单与查询命令：`zcode.open` 把窗口切到一个工作区，
-侧栏只显示当前工作区的会话，要让人看见新会话就先切过去；`zcode.create` 新建会话发任务、
-`zcode.send` 在已有会话里接着发，两条都先把会话切到「完全访问」、发出去就返回；`zcode.status` 读一个会话最新一轮做完没有、回答是什么；
-`zcode.archive` 把做完的会话从侧栏收起来。
+ZCode 插件对应包 `@godcreator/gwb-zcode`（`plugins/zcode/`，入口 `src/index.ts`）。本体是 cordis 服务 `gwbZcode`，五个方法：`open` 把窗口切到一个工作区，
+侧栏只显示当前工作区的会话，要让人看见新会话就先切过去；`create` 新建会话发任务、
+`send` 在已有会话里接着发，两个都先把会话切到「完全访问」、发出去就返回；`status` 读一个会话最新一轮做完没有、回答是什么；
+`archive` 把做完的会话从侧栏收起来。别的插件 inject 这个服务调方法；进程外的 agent 用同名的 `zcode.*` 命令，命令只查参数形状、再调同一个方法。
 
 ## 接缝图
 
@@ -21,23 +21,28 @@ ZCode 插件对应包 `@godcreator/gwb-zcode`（`plugins/zcode/`，入口 `src/i
 
 ## 接缝逐条
 
-### 1 agent → 插件
+### 1 调用方 → 插件
 
-agent 经 MCP 入口 `run` 调命令，参数形状写在登记时的 `usage` 里。参数只在这一层校验，认不出的键直接报错——比如多给一个
-`mode` 不会被悄悄忽略，权限只有完全访问一种：
+两种调用方走两条入口，背后是同一份实现。**别的插件**（qq-bot、协作站）inject 服务 `gwbZcode` 调方法，有类型、出错直接抛异常；服务名与方法签名就是本包给 cordis `Context` 补的那一项，类型从本包的 `dist/index.d.ts` 取：
 
-{/* ref file="../plugins/zcode/src/args.ts" lines="29-36" hash="a79674b46996" blob="dad04a3d67e9" */}
+{/* ref file="../plugins/zcode/src/index.ts" lines="98-102" hash="4ffd736c069f" blob="2ab820cf079c" */}
 
-`workspace` 要是已存在目录的绝对路径，这一条在登记命令的地方查（它要读磁盘）；`zcode.archive` 不查目录在不在，目录删了的旧会话也要能收起来：
+**进程外的 agent** 经 MCP 入口 `run` 调 `zcode.*` 命令。命令是服务方法的薄封装：只查参数形状（认不出的键直接报错，比如多给一个 `mode` 不会被悄悄忽略，权限只有完全访问一种），然后调同名方法：
 
-{/* ref file="../plugins/zcode/src/index.ts" lines="22-24" hash="a3bef6297dfa" blob="3da80ce2eeaa" */}
+{/* ref file="../plugins/zcode/src/args.ts" lines="9-16" hash="a79674b46996" blob="9f5f8a9bc7ec" */}
 
-**没有一条命令会一直等到 ZCode 做完。**MCP 客户端等一次调用有上限，Claude Code 是 300 秒没有动静就放弃，而 ZCode 干一个活常常超过这个时间。
-所以 `create` / `send` 发出就返回，`status` 的 `waitSeconds` 最多 240 秒、做完提前交回，agent 隔一阵问一次（轨迹卡[「发出即返回」](/trajectory/2026-10-02-dispatch-then-poll)）：
+{/* ref file="../plugins/zcode/src/commands.ts" lines="40-40" hash="92493ad22dbb" blob="2308335e057d" */}
 
-{/* ref file="../plugins/zcode/src/args.ts" lines="5-6" hash="6cd8bf19180a" blob="dad04a3d67e9" */}
+取值的含义两条入口都要查，所以放在服务方法里：`workspace` 要是已存在目录的绝对路径（它要读磁盘）；`archive` 只查是不是绝对路径，目录删了的旧会话也要能收起来：
 
-测试：`tests/args.test.ts`。
+{/* ref file="../plugins/zcode/src/checks.ts" lines="11-14" hash="d43a8e7161ff" blob="46c2c86d4f9d" */}
+
+**没有一个方法会一直等到 ZCode 做完。**MCP 客户端等一次调用有上限，Claude Code 是 300 秒没有动静就放弃，而 ZCode 做一个任务常常超过这个时间。
+所以 `create` / `send` 发出就返回，`status` 的 `waitSeconds` 最多 240 秒、做完提前交回，调用方隔一阵问一次（轨迹卡[「发出即返回」](/trajectory/2026-10-02-dispatch-then-poll)）：
+
+{/* ref file="../plugins/zcode/src/api.ts" lines="8-9" hash="ce72ed6731b8" blob="105f68ba60a1" */}
+
+测试：`tests/args.test.ts`（参数形状）、`tests/checks.test.ts`（取值）。
 
 ### 2 插件 → 进程表
 
@@ -123,9 +128,9 @@ ZCode 主进程是 Electron 里的 Node。9229 端口没开时，`process._debug
 ### 6 插件 → 说明书插件
 
 局部注入 `gwbSkills`，登记包里的 `skills/` 目录（相对产物写作 `'../skills/'`，所以 `skills` 在 `package.json` 的 `files` 里）。
-说明书 `zcode` 告诉 agent 什么时候派任务、任务说明怎么写、怎么主动回报或按需查询、回执怎么读。缺了说明书插件，命令照常可用：
+说明书 `zcode` 告诉 agent 什么时候派任务、任务说明怎么写、怎么查询结果、回执怎么读。缺了说明书插件，服务与命令照常可用：
 
-{/* ref file="../plugins/zcode/src/index.ts" lines="159-161" hash="8a9dbe7a78c3" blob="3da80ce2eeaa" */}
+{/* ref file="../plugins/zcode/src/index.ts" lines="50-52" hash="9cc8f78c4e7c" blob="2ab820cf079c" */}
 
 ### 7 插件 → 主进程（启动参数）
 
@@ -147,15 +152,16 @@ ZCode 主进程是 Electron 里的 Node。9229 端口没开时，`process._debug
 
 ## 对外能做什么
 
-`zcode.open` 把窗口切到一个工作区；`zcode.create` 在一个工作区里新建会话、发任务；`zcode.send` 在已有会话里接着发；`zcode.status` 读最新一轮的进度与回答；`zcode.archive` 归档一个会话。
-逐条的参数与回执在[命令](/docs/commands)，
-peer 写法在[插件之间怎么连](/docs/wiring)。
+服务 `gwbZcode` 的 `open` 把窗口切到一个工作区；`create` 在一个工作区里新建会话、发任务；`send` 在已有会话里接着发；`status` 读最新一轮的进度与回答；`archive` 归档一个会话。
+同名的 `zcode.*` 命令给 agent 用，参数与回执和方法一样，逐条见[命令](/docs/commands)；
+服务、注入与 peer 写法在[插件之间怎么连](/docs/wiring)。
 
 ## 依赖谁
 
 | 依赖 | 用来做什么 | 缺了会怎样 |
 | --- | --- | --- |
 | 命令总线 `gwb-commands`（必需） | 登记五条命令 | 插件不加载 |
+| `cordis` | 服务基类 `Service` | — |
 | 说明书 `gwb-skills`（局部注入） | 登记说明书 `zcode` | 照常加载；agent 读不到说明书 |
 | 内核包 `gwb-kernel-desktop` | 接口类型 | — |
 | ZCode 桌面端（本机安装、开着） | 一切：切工作区、建会话、切模式、发指令、读快照 | 命令报「应有一个 ZCode 主进程」 |
@@ -171,11 +177,6 @@ peer 写法在[插件之间怎么连](/docs/wiring)。
 - **不借定时自动化派任务**（轨迹卡[「不借定时任务」](/trajectory/2026-10-02-no-automation-detour)）
 - **不支持多个 ZCode 实例或多个工作区窗口**：遇到就报错，不替调用方挑
 - **不启动 ZCode**：没开就报错，由人打开；`zcode.open` 先确认主进程在，才运行第二个实例转交启动参数
-- **`zcode.create` 不替调用方切工作区**：切窗口会打断人正在看的界面，要不要切由调用方用 `zcode.open` 决定
-
-
-## 同工作区互斥与回报的边界
-
-同 workspace 同一时间只跑一轮：`create` / `send` 先查占用，被别的会话占着就报错（错误信息带占用中的 taskId），上一轮其实已做完的先自动释放再派；`status` 读到 `roundIsOver` 或 `archive` 后放开。占用表在插件进程内存里——插件重载后为空、与 claudecode 各记各的，这两点是已知边界；跨执行端的共表等出现真实的跨端同目录并发问题再做（方案与触发信号见接缝图集的 agent 派单架构篇）。
-
-回报不经本插件：常驻发起方（QQ、协作站）自己签票据、把直报约定写进任务说明，执行端经 MCP 入口直报发起方的接收命令；票据怎么校验是发起方之间的事，与本插件无关。本插件不保存票据、不转发结果、没有 replay 补交——不参与回报是「底层插件不知道上层业务」这条边界的直接体现。
+- **`create` 不替调用方切工作区**：切窗口会打断人正在看的界面，要不要切由调用方用 `open` 决定
+- **不管占用**：同一个工作区可以同时开几条会话（批量派活就是同一目录几条并行），会不会改到同一个文件由派任务的一方安排（轨迹卡[「删掉占用表」](/trajectory/2026-10-07-drop-workspace-occupancy)）
+- **不参与回报**：要不要回报、报给谁，由派任务的一方写进任务说明；本插件不保存凭证、不转发结果，也不认识任何上层应用

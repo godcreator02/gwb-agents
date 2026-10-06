@@ -1,6 +1,6 @@
 {
   "name": "@godcreator/gwb-claudecode",
-  "version": "0.3.1",
+  "version": "0.4.0",
   "description": "Claude Code 原生 CLI 会话：服务 gwbClaudecode 创建、续聊、读进程事件保存的状态；claudecode.* 命令是它给 agent 的薄封装。",
   "type": "module",
   "exports": {

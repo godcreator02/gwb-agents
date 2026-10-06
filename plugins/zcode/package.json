@@ -1,6 +1,6 @@
 {
   "name": "@godcreator/gwb-zcode",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "description": "给运行中的 ZCode 桌面端派任务：切工作区、新建或续聊、完全访问、发出即返回；同工作区同一时间只跑一轮，回报由发起方直报、本插件不参与。公开命令 5 条；skill 1 份。",
   "type": "module",
   "exports": {
@@ -45,8 +45,5 @@
     "oxlint-tsgolint": "7.0.2001",
     "typescript": "^7.0.2",
     "vitest": "^4.1.10"
-  },
-  "dependencies": {
-    "@godcreator/gwb-report-contract": "workspace:*"
   }
 }

@@ -2,7 +2,10 @@ import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process'
 import { randomUUID } from 'node:crypto'
 import { stat } from 'node:fs/promises'
 import path from 'node:path'
-import { workspaceOccupiedMessage } from '@godcreator/gwb-report-contract'
+
+/** 占用错误的措辞是跨插件约定（与 gwb-zcode 一字不差）：qq-bot 与协作站靠「workspace 已被会话」开头认出占用，改动要四处同步 */
+const workspaceOccupiedMessage = (holder: string): string =>
+  `workspace 已被会话 ${holder} 占用：同工作区同一时间只跑一轮；先查那一轮做完没有，做完（或人工核对已停止）后再派`
 
 export interface Session { sessionId: string; workspace: string; round: number; status: 'running' | 'completed' | 'failed' | 'unknown'; text: string }
 export interface RuntimeDeps { executable(): string; read(): Promise<unknown>; write(value: unknown): Promise<void>; error(message: string): void }

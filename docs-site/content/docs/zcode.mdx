@@ -30,7 +30,7 @@ agent 经 MCP 入口 `run` 调命令，参数形状写在登记时的 `usage` �
 
 `workspace` 要是已存在目录的绝对路径，这一条在登记命令的地方查（它要读磁盘）；`zcode.archive` 不查目录在不在，目录删了的旧会话也要能收起来：
 
-{/* ref file="../plugins/zcode/src/index.ts" lines="23-25" hash="a3bef6297dfa" blob="901c736691f0" */}
+{/* ref file="../plugins/zcode/src/index.ts" lines="22-24" hash="a3bef6297dfa" blob="3da80ce2eeaa" */}
 
 **没有一条命令会一直等到 ZCode 做完。**MCP 客户端等一次调用有上限，Claude Code 是 300 秒没有动静就放弃，而 ZCode 干一个活常常超过这个时间。
 所以 `create` / `send` 发出就返回，`status` 的 `waitSeconds` 最多 240 秒、做完提前交回，agent 隔一阵问一次（轨迹卡[「发出即返回」](/trajectory/2026-10-02-dispatch-then-poll)）：
@@ -125,7 +125,7 @@ ZCode 主进程是 Electron 里的 Node。9229 端口没开时，`process._debug
 局部注入 `gwbSkills`，登记包里的 `skills/` 目录（相对产物写作 `'../skills/'`，所以 `skills` 在 `package.json` 的 `files` 里）。
 说明书 `zcode` 告诉 agent 什么时候派任务、任务说明怎么写、怎么主动回报或按需查询、回执怎么读。缺了说明书插件，命令照常可用：
 
-{/* ref file="../plugins/zcode/src/index.ts" lines="160-162" hash="8a9dbe7a78c3" blob="e7d20e92e580" */}
+{/* ref file="../plugins/zcode/src/index.ts" lines="159-161" hash="8a9dbe7a78c3" blob="3da80ce2eeaa" */}
 
 ### 7 插件 → 主进程（启动参数）
 
@@ -178,4 +178,4 @@ peer 写法在[插件之间怎么连](/docs/wiring)。
 
 同 workspace 同一时间只跑一轮：`create` / `send` 先查占用，被别的会话占着就报错（错误信息带占用中的 taskId），上一轮其实已做完的先自动释放再派；`status` 读到 `roundIsOver` 或 `archive` 后放开。占用表在插件进程内存里——插件重载后为空、与 claudecode 各记各的，这两点是已知边界；跨执行端的共表等出现真实的跨端同目录并发问题再做（方案与触发信号见接缝图集的 agent 派单架构篇）。
 
-回报不经本插件：常驻发起方（QQ、协作站）自己签票据、把直报约定写进任务说明，执行端经 MCP 入口直报发起方的接收命令；票据的校验与幂等判定共用 `@godcreator/gwb-report-contract`。本插件不保存票据、不转发结果、没有 replay 补交——不参与回报是「底层插件不知道上层业务」这条边界的直接体现。
+回报不经本插件：常驻发起方（QQ、协作站）自己签票据、把直报约定写进任务说明，执行端经 MCP 入口直报发起方的接收命令；票据怎么校验是发起方之间的事，与本插件无关。本插件不保存票据、不转发结果、没有 replay 补交——不参与回报是「底层插件不知道上层业务」这条边界的直接体现。

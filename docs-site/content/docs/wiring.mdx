@@ -14,7 +14,7 @@ description: gwb-zcode 提供的命令与说明书，注入的服务与 peer 写
 | 命令 | `zcode.open` / `zcode.create` / `zcode.send` / `zcode.status` / `zcode.archive` | 切 ZCode 窗口的工作区、派任务、读结果、归档会话，形状见[命令](/docs/commands) |
 | 说明书 | `zcode` | 包根 `skills/zcode/`，经 `gwbSkills.register` 登记 |
 
-不提供服务、不注册窗格、不声明设置项。回报不经本插件（发起方签票据、执行端直报），占用错误的统一措辞来自依赖包 `@godcreator/gwb-report-contract`。
+不提供服务、不注册窗格、不声明设置项。回报不经本插件（发起方签票据、执行端直报）；占用错误的措辞是跨插件约定（以「workspace 已被会话」开头），不是共享代码。
 
 ### 注入
 
@@ -25,7 +25,7 @@ description: gwb-zcode 提供的命令与说明书，注入的服务与 peer 写
 
 内核包 `@godcreator/gwb-kernel-desktop`（`^0.10.1`）只提供接口类型。
 
-{/* ref file="../plugins/zcode/src/index.ts" lines="17-17" hash="397a91e60cb0" blob="901c736691f0" */}
+{/* ref file="../plugins/zcode/src/index.ts" lines="16-16" hash="397a91e60cb0" blob="3da80ce2eeaa" */}
 
 {/* ref file="../plugins/zcode/package.json" lines="30-40" hash="4689da6c52b5" blob="0eb0bf95cef6" */}
 

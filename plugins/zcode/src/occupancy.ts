@@ -1,5 +1,12 @@
 import path from 'node:path'
-import { workspaceOccupiedMessage } from '@godcreator/gwb-report-contract'
+
+/**
+ * 占用错误的措辞是跨插件约定（不是共享代码）：qq-bot 与协作站靠「workspace 已被会话」这个开头认出占用，
+ * 收到就把任务留在队列而不是当派单失败。改动措辞要与 gwb-claudecode、gwb-qq-bot、协作站同步，
+ * 约定的正本在接缝图集（uxje5-gwb-seams）的 agent 派单架构篇。
+ */
+export const workspaceOccupiedMessage = (holder: string): string =>
+  `workspace 已被会话 ${holder} 占用：同工作区同一时间只跑一轮；先查那一轮做完没有，做完（或人工核对已停止）后再派`
 
 /**
  * 同 workspace 同一时间只跑一轮：create / send 时登记，status 读到那一轮做完或归档时释放。

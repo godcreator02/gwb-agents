@@ -1,3 +1,11 @@
 {
-  "pages": ["index", "commands", "wiring", "glossary", "outputs"]
+  "pages": [
+    "index",
+    "zcode",
+    "claudecode",
+    "commands",
+    "wiring",
+    "glossary",
+    "outputs"
+  ]
 }

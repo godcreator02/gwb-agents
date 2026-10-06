@@ -1,8 +1,11 @@
 import fs from 'node:fs'
+import path from 'node:path'
 import type { GwbContext } from '@godcreator/gwb-kernel-desktop'
 // 空的类型 import 只为让这几个包的 `declare module 'cordis'` 生效，ctx 上才有对应服务的类型
 import type {} from '@godcreator/gwb-commands'
 import type {} from '@godcreator/gwb-skills'
+import type {} from '@godcreator/gwb-data'
+import { ReportBook, parseReplay } from './reports.js'
 import { archiveTask } from './archive.js'
 import { MAX_WAIT_SECONDS, parseArchiveArgs, parseCreateArgs, parseOpenArgs, parseSendArgs, parseStatusArgs } from './args.js'
 import { withDesktop } from './desktop.js'
@@ -12,7 +15,7 @@ import { openWorkspace } from './workspace.js'
 
 export const name = 'gwb-zcode'
 
-export const inject = ['gwbCommands']
+export const inject = ['gwbCommands', 'gwbData']
 
 const SENT_SHAPE =
   '发出后等这一轮在 ZCode 里开始了就交回（通常 2 秒左右），不等它做完：回 { taskId, title, status, mode, roundStarted }。' +
@@ -27,6 +30,20 @@ export function apply(ctx: GwbContext): void {
   const commands = ctx.gwbCommands
   if (commands === undefined) throw new Error('ctx.gwbCommands 不在：inject 里写了它，cordis 本不该调用 apply')
   const warn = (message: string): void => log.warn(message)
+  const reports = new ReportBook({
+    home: path.basename(ctx.gwbKernel.dataDir),
+    read: () => ctx.gwbData.readDoc('reports'),
+    write: (value) => ctx.gwbData.writeDoc('reports', value),
+    deliver: (command, report) => commands.run(command, report),
+    warn,
+  })
+  ctx.effect(() => () => reports.close())
+  commands.register({ name: 'zcode.report', description: '提交派单指定的本轮结果，保存后立即通知派单方',
+    usage: '{ ticket: string, state: "completed"|"failed"|"needs_input", text: string }。ticket 来自本轮任务；使用指定 home 的 MCP 服务。相同结果重交去重，不同结果拒绝覆盖。回 {recorded, accepted, duplicate}；recorded 表示已保存，accepted 表示接收方已接收，不代表 QQ 已送达。', effect: 'external' },
+    async (raw) => ({ ok: true, data: await reports.report(raw) }))
+  commands.register({ name: 'zcode.report.replay', description: '接收插件加载后补交已经保存但尚未接收的结果',
+    usage: '{callback: string}。只由接收插件在加载时调用，不派发任务、不轮询。', effect: 'external', hiddenFromAgents: true },
+    async (raw) => ({ ok: true, data: await reports.replay(parseReplay(raw)) }))
 
   commands.register(
     {
@@ -55,19 +72,21 @@ export function apply(ctx: GwbContext): void {
       name: 'zcode.create',
       description: '在 ZCode 桌面端的一个工作区里新建会话、以完全访问权限发出任务，发出即返回；会话出现在 ZCode 侧栏里',
       usage:
-        '参数 { workspace: string, prompt: string }。workspace 是工作区目录的绝对路径（ZCode 在这个目录里干活）。' +
+        '参数 { workspace: string, prompt: string, report?: {id: string, callback: string, server: string} }。report 指定本轮唯一 id、接收命令和 MCP 服务名；自动附加 zcode.report 约定。workspace 是工作区目录的绝对路径。' +
         '要求 ZCode 桌面端开着、只有一个工作区窗口。' +
         SENT_SHAPE +
         '；taskId 留着给 zcode.status 与 zcode.send',
       effect: 'external',
     },
     async (raw) => {
-      const { workspace, prompt } = parseCreateArgs(raw)
+      const { workspace, prompt, report } = parseCreateArgs(raw)
       requireExistingDirectory('zcode.create', workspace)
       return withDesktop(warn, async (services) => {
         const taskId = await createTask(services, workspace)
         log.info(`在 ${workspace} 新建会话 ${taskId}`)
-        return { ok: true, data: await sendRound(services, { workspace, taskId, prompt }) }
+        const ticket = report === undefined ? null : await reports.prepare(report, workspace, taskId)
+        const content = report === undefined || ticket === null ? prompt : reports.prompt(prompt, report, ticket)
+        return { ok: true, data: await sendRound(services, { workspace, taskId, prompt: content }) }
       })
     },
   )
@@ -77,16 +96,18 @@ export function apply(ctx: GwbContext): void {
       name: 'zcode.send',
       description: '在 ZCode 桌面端的一个已有会话里接着发指令（先切到完全访问），发出即返回',
       usage:
-        '参数 { workspace: string, task: string, prompt: string }。task 是 zcode.create 回执里的 taskId，workspace 写建它时的那个目录。' +
+        '参数 { workspace: string, task: string, prompt: string, report?: {id: string, callback: string, server: string} }。report 同 create。task 是 zcode.create 回执里的 taskId，workspace 写建它时的那个目录。' +
         SENT_SHAPE,
       effect: 'external',
     },
     async (raw) => {
-      const { workspace, task, prompt } = parseSendArgs(raw)
+      const { workspace, task, prompt, report } = parseSendArgs(raw)
       requireExistingDirectory('zcode.send', workspace)
       return withDesktop(warn, async (services) => {
         log.info(`往会话 ${task} 发指令`)
-        return { ok: true, data: await sendRound(services, { workspace, taskId: task, prompt }) }
+        const ticket = report === undefined ? null : await reports.prepare(report, workspace, task)
+        const content = report === undefined || ticket === null ? prompt : reports.prompt(prompt, report, ticket)
+        return { ok: true, data: await sendRound(services, { workspace, taskId: task, prompt: content }) }
       })
     },
   )

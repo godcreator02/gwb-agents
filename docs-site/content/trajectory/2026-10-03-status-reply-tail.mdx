@@ -1,12 +1,14 @@
 ---
 born-at: 2026-10-03T17:20
 type: choice
-parent: [2026-10-02-dispatch-then-poll]
+parent: [2026-10-02-gwb-zcode]
 label: 回答只取末尾
 domain: gwb 工具插件
 ---
 
 ## 背景
+
+pivots-from:: [发出即返回](2026-10-02-dispatch-then-poll.mdx)
 
 老论文库迁移时用脚本给 ZCode 派了一百多个拆段任务，每分钟用 `zcode.status` 查一次。其中一条会话做完以后，每次查都报
 「返回有 63593 字符，超过单次返回的上限 40000」，回执交不回来，派活脚本一直以为它还在跑，占着一个并行名额。

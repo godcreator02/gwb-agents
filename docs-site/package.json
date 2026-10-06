@@ -34,5 +34,5 @@
     "tailwindcss": "^4.3.3",
     "typescript": "^7.0.2"
   },
-  "description": "gwb-zcode 的文档站（docfirst）：仓根 README / AGENTS / CLAUDE 由 render 生成"
+  "description": "gwb-agents 文档站：ZCode 与 Claude Code 插件及共同开发约定"
 }

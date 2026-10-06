@@ -1,0 +1,23 @@
+---
+born-at: 2026-10-06T12:23
+type: choice
+parent: [2026-10-02-gwb-zcode]
+label: 同仓双插件
+domain: 仓库边界
+---
+
+## 背景
+
+QQ bot 正在增加 Claude Code 执行端。ZCode 已有独立插件仓，Claude Code 的原生实现仍在单独的 scaffold 目录中开发。
+用户提出：“把zode和claudecode封进一个仓库开发，两个插件塞一个仓库里”，并选择仓库名 gwb-agents。
+
+## 结论与边界
+
+按用户决定，将两个独立插件放入 gwb-agents 的 plugins/zcode 与 plugins/claudecode，共用开发仓库、workspace 和文档站。
+插件包名、原生命令、依赖和版本分别维护；同仓不引入统一 agent 服务或公共业务账本，也不代表 Claude Code 与 QQ 的回报链路已经完成实机验收。
+
+QQ bot 继续独立开发，保留自己的聊天来源和 agent 适配；协作站保留自己的派单接口。已有 ZCode Git 历史、文档与实验材料随仓保留。
+
+## 否掉的候选
+
+继续维护两个开发仓不符合这次用户明确选择。把两个插件合成一个 dispatch 插件会同时改变业务抽象与运行时边界，超出了本次同仓开发的决定。

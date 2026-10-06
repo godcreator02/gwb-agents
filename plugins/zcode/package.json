@@ -1,7 +1,7 @@
 {
   "name": "@godcreator/gwb-zcode",
-  "version": "0.2.5",
-  "description": "给运行中的 ZCode 桌面端派任务：把窗口切到要用的工作区，新建会话或在已有会话里接着发指令，一律切到完全访问，发出即返回，再读最新一轮的进度与回答，用完归档；任务出现在 ZCode 侧栏里。命令 5 条；skill 1 份。",
+  "version": "0.2.6",
+  "description": "给运行中的 ZCode 桌面端派任务：切工作区、新建或续聊、完全访问、发出即返回；支持每轮主动回报、按需查进度与归档。公开命令 6 条；skill 1 份。",
   "type": "module",
   "exports": {
     ".": "./dist/index.js"
@@ -15,7 +15,7 @@
   ],
   "repository": {
     "type": "git",
-    "url": "https://git.tianshen02.online:28377/godcreator/gwb-zcode.git"
+    "url": "https://git.tianshen02.online:28377/godcreator/gwb-agents.git"
   },
   "publishConfig": {
     "registry": "https://git.tianshen02.online:28377/api/packages/godcreator/npm/"
@@ -28,6 +28,7 @@
     "check": "pnpm run typecheck && pnpm run lint && pnpm run test"
   },
   "peerDependencies": {
+    "@godcreator/gwb-data": "^0.1.12",
     "@godcreator/gwb-commands": "^0.6.0",
     "@godcreator/gwb-kernel-desktop": "^0.10.1",
     "@godcreator/gwb-skills": "^0.4.7"

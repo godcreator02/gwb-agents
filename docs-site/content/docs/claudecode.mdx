@@ -1,0 +1,42 @@
+---
+title: Claude Code 插件
+description: 本机原生 CLI 会话的创建、续聊、事件状态和恢复边界
+---
+
+**本页回答**：`plugins/claudecode` 的本地实现负责什么，以及真实回报的验收边界。
+
+## 功能
+
+创建本机 Claude Code 原生 CLI 进程，用 stdin 提交提示词，用流式 JSON 的 result 事件保存本轮状态。
+命令发出后返回会话 ID，结果到达不靠定时轮询。隔离 home 已实测原生模型调用 `qq-bot.report`，结果保存并送达原群；重载、重复回报与窗口边界仍由 QQ 插件处理。
+
+## 接口
+
+| 命令 | 参数 | 作用 |
+| --- | --- | --- |
+| `claudecode.create` | `{workspace,prompt}` | 新建 UUID 会话，返回 `{sessionId,round,accepted:true}` |
+| `claudecode.send` | `{workspace,sessionId,prompt}` | 等待本插件上一轮进程退出，再用原生 resume 续聊 |
+| `claudecode.status` | `{workspace,sessionId}` | 读取进程事件保存的状态；不代表 QQ 已送达 |
+| `claudecode.resolve` | `{workspace,sessionId,confirmedStopped:true}` | 人工核对停止后解除重载留下的 unknown 状态 |
+
+工作区必须为绝对路径；续聊与查询只认本 home、同工作区的会话。参数与命令的正本在本包 `src/index.ts`、`src/runtime.ts`。
+
+{/* ref file="../plugins/claudecode/src/index.ts" hash="58e8500b5f41" blob="0abc5955c5b0" */}
+
+{/* ref file="../plugins/claudecode/src/runtime.ts" hash="ad8b658fc6ae" blob="c4005ae7a349" */}
+
+## 依赖与接缝
+
+| 接缝 | 归属 |
+| --- | --- |
+| 提供服务 | 不提供共享服务；只登记 `claudecode.*` 命令 |
+| 注入 `gwbCommands` | 登记命令 |
+| 注入 `gwbSettings` | 本插件 `executable` 设置，指向原生 exe |
+| 注入 `gwbData` | 本 home 的 `sessions` 文档保存进程状态 |
+| 外部进程 | 本机 Claude Code；新建和续聊均使用 `--permission-mode bypassPermissions`，仍加载现有登录、MCP 和纪律 hooks |
+| 业务回报 | 由调用方在任务里指定；QQ 接收 `qq-bot.report`，本插件不代替它保存回报凭证 |
+
+## 不做的事
+
+不接管 QQ 来源、群回复地址、协作站任务或日志库；不将进程启动当成业务完成。权限模式按用户授权固定为 `bypassPermissions`，不改全局配置。
+重载后未确认结束的会话保留 unknown，不自动重发任务。

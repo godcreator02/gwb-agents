@@ -1,22 +1,25 @@
-# gwb-zcode
+# gwb-agents
 
-gwb 插件 `@godcreator/gwb-zcode`：让 agent 经 gwb 工作台给运行中的 ZCode 桌面端派任务。
+在同一个仓库开发两个独立的 GWB agent 插件：
 
-- `zcode.open`：把 ZCode 窗口切到一个工作区，侧栏随之显示这个工作区的会话
-- `zcode.create`：在一个工作区里新建会话、发出任务
-- `zcode.send`：在已有会话里接着发指令
-- `zcode.status`：读一个会话最新一轮做完没有、回答是什么
-- `zcode.archive`：把用完的会话从 ZCode 侧栏收起来（记录不删）
+| 目录 | 包 | 原生入口 |
+| --- | --- | --- |
+| `plugins/zcode/` | `@godcreator/gwb-zcode` | ZCode 桌面端：打开工作区、创建、续聊、查询、归档与主动回报 |
+| `plugins/claudecode/` | `@godcreator/gwb-claudecode` | Claude Code 原生 CLI：创建、续聊、状态与人工恢复，固定 bypassPermissions |
 
-派任务的两条都先把会话切到 ZCode 的「完全访问」，发出就返回，结果用 `zcode.status` 轮询。会话出现在 ZCode 侧栏里，人能看着它执行、能在界面上接着聊。ZCode 没有给外部用的建任务入口，
-插件经 ZCode 主进程的 Node 调试端口调客户端自己的任务服务，依赖 ZCode 的内部结构，ZCode 升级后可能要跟着改。
+各插件保留自己的命令、依赖、版本和安装入口。QQ bot 独立于本仓，调用方按自己的业务需求适配原生命令。
 
-用法读说明书 `zcode`（`skill.read {"name":"zcode"}`）；原理、接缝与取舍在文档站 `docs-site/`，实验材料在 `probes/`。
-
-## 构建与检查
+## 开发
 
 ```powershell
 pnpm install
 pnpm build
 pnpm check
 ```
+
+单包操作用 `pnpm --filter @godcreator/gwb-zcode build` 或 `pnpm --filter @godcreator/gwb-claudecode check`。
+隔离 home 安装：`devkit.dev {"home":"<现场名>","dir":"<本仓绝对路径>","packages":["plugins/zcode","plugins/claudecode"]}`。
+包按各自变更独立发布；升版本前读 `gwb-release`。
+
+文档站在 `docs-site/`，单独安装依赖，运行 `pnpm doc:render`、`pnpm doc`；历史实验与轨迹全部保留。
+本仓沿用原 ZCode 的 Git 历史；远端与本地开发目录统一为 `gwb-agents`，两个包分别关联这个仓库。

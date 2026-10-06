@@ -1,174 +1,32 @@
 ---
-title: gwb-zcode
-description: 让 agent 经 gwb 工作台给运行中的 ZCode 桌面端派任务：把窗口切到要用的工作区，新建会话或在已有会话里接着发指令，一律完全访问，发出即返回、再轮询结果，会话出现在 ZCode 侧栏里。本页按接缝讲插件怎么连到 ZCode 的任务服务
+title: gwb-agents
+description: 在同一仓库开发 ZCode 与 Claude Code 两个独立 agent 插件
 ---
 
-**本页回答**：这个插件做什么、它和 agent、ZCode 桌面端之间的每条接缝传什么、由谁负责、怎么测，以及它刻意不做什么。
+**本页回答**：两个 agent 插件怎么放在一起开发，哪些边界仍各自拥有。
 
-ZCode 是本机装的另一个 AI 编程客户端（Electron 桌面端，模型走用户的 GLM 套餐）。把批量的任务交给它，能省下派任务一方自己的模型额度。
-ZCode 没有给外部用的建任务入口：启动参数与深链接只能打开工作区，本机也没有它的接口端口；能让任务出现在侧栏里、人看得见的，只有它客户端窗口里
-自己的服务。所以这个插件打开 ZCode 主进程的 Node 调试端口，在窗口里执行脚本调这些服务——
-这条路怎么找到的、为什么不用 CLI 无界面或定时自动化，见轨迹区。
+## 两个独立插件
 
-插件只有一个包 `@godcreator/gwb-zcode`（`plugins/zcode/`，入口 `src/index.ts`），五条命令：`zcode.open` 把窗口切到一个工作区，
-侧栏只显示当前工作区的会话，要让人看见新会话就先切过去；`zcode.create` 新建会话发任务、
-`zcode.send` 在已有会话里接着发，两条都先把会话切到「完全访问」、发出去就返回；`zcode.status` 读一个会话最新一轮做完没有、回答是什么；
-`zcode.archive` 把做完的会话从侧栏收起来。
+| 目录 | 发布包 | 接入方式 | 说明 |
+| --- | --- | --- | --- |
+| `plugins/zcode` | `@godcreator/gwb-zcode` | ZCode 桌面端内部服务 | [ZCode 插件](/docs/zcode) |
+| `plugins/claudecode` | `@godcreator/gwb-claudecode` | Claude Code 原生 CLI 进程 | [Claude Code 插件](/docs/claudecode) |
 
-## 接缝图
+两个插件共用仓库、pnpm workspace、锁文件和文档站。每个包保留自己的版本、依赖、命令与测试，可以单独安装、构建和发布。
 
-<ZcodeSeams />
+{/* ref file="../pnpm-workspace.yaml" hash="8a44a5c0549a" blob="1d45833ee151" */}
 
-## 接缝逐条
+## 应用接缝
 
-### 1 agent → 插件
+QQ bot 留在 `gwb-qq-bot` 仓，拥有聊天来源、项目与日志绑定、QQ 回报凭证和送达记录；它按自己的需求适配两种原生命令。
+协作站拥有自己的派单接口。这里不增加公共业务队列、统一任务账本或 dispatch 插件。
 
-agent 经 MCP 入口 `run` 调五条命令，参数形状写在登记时的 `usage` 里。参数只在这一层校验，认不出的键直接报错——比如多给一个
-`mode` 不会被悄悄忽略，权限只有完全访问一种：
+ZCode 的 `taskId` 与 Claude Code 的 `sessionId` 分别属于各自的原生会话；切换 agent 时由调用方创建新的会话，不跨软件复用上下文 ID。
 
-{/* ref file="../plugins/zcode/src/args.ts" lines="29-36" hash="a79674b46996" blob="dad04a3d67e9" */}
+## 开发与检查
 
-`workspace` 要是已存在目录的绝对路径，这一条在登记命令的地方查（它要读磁盘）；`zcode.archive` 不查目录在不在，目录删了的旧会话也要能收起来：
+仓根运行 `pnpm install`、`pnpm build`、`pnpm check`；只处理一个包时用 `pnpm --filter @godcreator/gwb-zcode build` 或 `pnpm --filter @godcreator/gwb-claudecode check`。
+文档站单独安装依赖，运行 `pnpm doc:render` 与 `pnpm doc`。实验材料留在仓根 `probes/`，不加入 workspace。
 
-{/* ref file="../plugins/zcode/src/index.ts" lines="21-23" hash="a3bef6297dfa" blob="f9305d9c6595" */}
-
-**没有一条命令会一直等到 ZCode 做完。**MCP 客户端等一次调用有上限，Claude Code 是 300 秒没有动静就放弃，而 ZCode 干一个活常常超过这个时间。
-所以 `create` / `send` 发出就返回，`status` 的 `waitSeconds` 最多 240 秒、做完提前交回，agent 隔一阵问一次（轨迹卡[「发出即返回」](/trajectory/2026-10-02-dispatch-then-poll)）：
-
-{/* ref file="../plugins/zcode/src/args.ts" lines="5-6" hash="6cd8bf19180a" blob="9c9c6bdf9e1f" */}
-
-测试：`tests/args.test.ts`。
-
-### 2 插件 → 进程表
-
-调试端口要开在 ZCode 主进程上，先找到它的 pid。ZCode 一开就是十几个 `ZCode.exe`（渲染进程、GPU 进程、每个会话一个 `zcode.cjs app-server`），
-主进程是命令行里没有 `--type=`、`zcode.cjs`、`windows-helper` 的那一个。剩下不是恰好一个就报错，不猜：
-
-{/* ref file="../plugins/zcode/src/desktop.ts" lines="15-17" hash="fcb66fbc34fb" blob="1cb48af3256e" */}
-
-没有自动测试：要真的开着 ZCode。在隔离 home 里调命令验证。
-
-### 3 插件 → 主进程（调试端口）
-
-ZCode 主进程是 Electron 里的 Node。9229 端口没开时，`process._debugProcess(pid)` 让它在不重启的情况下打开调试端口；开了以后经 WebSocket 发
-`Runtime.evaluate`。端口属于 ZCode 进程，可能同时被多个 home 或调试器使用。命令结束只断开自己的 WebSocket，端口随 ZCode 退出关闭：
-
-{/* ref file="../plugins/zcode/src/desktop.ts" lines="82-101" hash="2aa62398bdb6" blob="421ea020dcca" */}
-
-连上后先核对端口确实属于刚才找到的那个 pid，别的程序占着 9229 就报错：
-
-{/* ref file="../plugins/zcode/src/desktop.ts" lines="190-192" hash="444caa77a869" blob="421ea020dcca" */}
-
-**同一 home 的并发命令共用一个连接**，最后一条结束才断开；不同 home 各用自己的连接。不能根据一个 home 的引用计数关闭整个端口，
-否则一个机器人完成查询会中断另一个的派发回执。也不再安排延迟关闭端口的脚本，避免紧接着到来的命令受到旧定时器影响：
-
-{/* ref file="../plugins/zcode/src/desktop.ts" lines="214-249" hash="a46299878854" blob="421ea020dcca" */}
-
-清理连接失败只记告警、不盖过成功回执。WebSocket 断线立即拒绝正在等待的请求、清掉超时计时器；不自动重发任何指令，避免已经派出去的任务重复执行。
-连接与请求都有 30 秒等待上限。`tests/desktop.test.ts` 用两个独立插件实例验证跨 home 并发，并验证断线会立即报错。
-
-### 4 主进程 → 工作区窗口
-
-在主进程里取 Electron 的 `BrowserWindow`，按页面地址认出工作区窗口，必须恰好一个：
-
-{/* ref file="../plugins/zcode/src/desktop.ts" lines="173-179" hash="f922dac801c5" blob="421ea020dcca" */}
-
-然后在那个窗口里 `executeJavaScript`，从 React 的根节点沿 fiber 树广度优先找到 `memoizedProps.services` 下的服务，调它的方法，
-返回值按 JSON 带回。用到两个服务：`zcodeTaskService` 管任务（侧栏里的一条），`zcodeAgentService` 管会话背后的代理进程。
-**这一段完全依赖 ZCode 的内部结构**：React 树里服务挂在哪、服务叫什么，ZCode 升级都可能改，找不到时报错写明是这里：
-
-{/* ref file="../plugins/zcode/src/desktop.ts" lines="24-25" hash="91e6ab54af71" blob="db862b814598" */}
-
-{/* ref file="../plugins/zcode/src/desktop.ts" lines="38-48" hash="ec001d7bb4d6" blob="db862b814598" */}
-
-{/* ref file="../plugins/zcode/src/desktop.ts" lines="193-197" hash="526d0309baef" blob="421ea020dcca" */}
-
-### 5 窗口 → 会话
-
-`createTask` 必须带 `v4Create: true`，否则走旧的创建流程，发指令时报数据库关联错误；给它传 `mode` 不起作用：
-
-{/* ref file="../plugins/zcode/src/round.ts" lines="29-33" hash="329cae0cbfd0" blob="1835c595758d" */}
-
-**完全访问以代理进程为准。**代理实际用的模式在 `zcodeAgentService.readSession` 的 `settings.mode.current`；任务的 `meta.mode`（侧栏与界面显示的那个）
-只在代理的模式真的变了时才更新，会落后——新会话继承到工作区上次用的 `yolo`、跑过的会话放一阵子再恢复，都可能代理是 `yolo`、界面显示「变更前确认」。
-每次发指令前代理不是 `yolo` 就切，切完读回还不是就不发；显示落后时只在会话没在跑的时候先切 `build` 再切 `yolo` 让它跟上，
-跑着的时候切到 `build`，那一瞬间的工具调用会停下等确认（轨迹卡[「模式与收尾信号」](/trajectory/2026-10-02-mode-and-round-signals)、
-[「显示模式会落回」](/trajectory/2026-10-02-displayed-mode-drifts)）：
-
-{/* ref file="../plugins/zcode/src/round.ts" lines="35-56" hash="4741228ff8df" blob="1835c595758d" */}
-
-**发出后等这一轮开始了才交回。**`status` 把「最新一轮」切在最后一条用户消息上，刚发出的一两秒里快照还是上一轮；所以 `send` 每 0.5 秒读一次，
-看到这一轮的提问出现了才交回，30 秒还没出现（多半排在还在跑的上一轮后面）就先交回、带 `roundStarted: false`：
-
-{/* ref file="../plugins/zcode/src/round.ts" lines="68-92" hash="533d74f378a3" blob="1835c595758d" */}
-
-**判断这一轮做完的难点在于 `status` 落后于消息**：转成 `completed` 时回答可能还没写进快照，而一轮里的回答按同一个消息 id 越写越长、写完才带上 `durationMs`。
-所以状态是结束类的、并且这一轮的助手消息都有 `durationMs` 才算做完；失败类状态不等回答；停在等人确认权限时也算停下了（完全访问下不该出现，出现了就是哪里不对）：
-
-{/* ref file="../plugins/zcode/src/task-progress.ts" lines="68-91" hash="7fa1e134fb83" blob="32ed56e8d12c" */}
-
-`status` 的 `mode` 同样报代理的模式，不报会落后的显示值：
-
-{/* ref file="../plugins/zcode/src/round.ts" lines="94-105" hash="c56d6db6f860" blob="1835c595758d" */}
-
-**归档用 `archiveTask`。**侧栏索引里那条的 `archived` 变成 1，会话记录不删。它的返回里没有 `archived`，所以归档后用 `listArchivedTasks` 看这条在不在已归档列表里；
-还在跑的会话不归档、直接报错，归档后它从侧栏消失，人就看不见它还在执行（轨迹卡[「加归档」](/trajectory/2026-10-02-archive-sessions)）：
-
-{/* ref file="../plugins/zcode/src/archive.ts" lines="14-28" hash="3cdc7d0478aa" blob="956c72817d7c" */}
-
-快照来自 ZCode 内部接口，形状不对直接报错，不按缺省值往下跑。测试：`tests/task-progress.test.ts`，按实测的顺序覆盖一轮里快照的几个阶段：
-
-{/* ref file="../plugins/zcode/tests/task-progress.test.ts" lines="15-40" hash="f647690a2cd0" blob="2259aedb7c24" */}
-
-### 6 插件 → 说明书插件
-
-局部注入 `gwbSkills`，登记包里的 `skills/` 目录（相对产物写作 `'../skills/'`，所以 `skills` 在 `package.json` 的 `files` 里）。
-说明书 `zcode` 告诉 agent 什么时候派任务、任务说明怎么写、怎么轮询、回执怎么读。缺了说明书插件，命令照常可用：
-
-{/* ref file="../plugins/zcode/src/index.ts" lines="139-141" hash="8a9dbe7a78c3" blob="f9305d9c6595" */}
-
-### 7 插件 → 主进程（启动参数）
-
-切工作区不调窗口里的服务，用 ZCode 自己认的启动参数：运行一次 `ZCode.exe --open-workspace <目录>`，ZCode 只允许一个实例，
-这个第二个实例把参数转给正在运行的主进程就退出，窗口切到那个工作区，不多开窗口。`ZCode.exe` 的路径取主进程的 `process.execPath`：
-
-{/* ref file="../plugins/zcode/src/desktop.ts" lines="21-22" hash="c4947221bbfa" blob="db862b814598" */}
-
-切没切成以窗口自己的状态为准：经接缝 3、4 在窗口里沿 React 树读组件的 `activeWorkspacePath`，几个组件都带着它，值必须恰好一种，
-否则说明 ZCode 内部结构变了、直接报错：
-
-{/* ref file="../plugins/zcode/src/desktop.ts" lines="27-36" hash="ac66b6d73ced" blob="db862b814598" */}
-
-窗口本来就在这个工作区就不运行；运行后每 0.25 秒读一次，10 秒内没切过去就报错。路径比较不分大小写、不管结尾的分隔符：
-
-{/* ref file="../plugins/zcode/src/workspace.ts" lines="17-42" hash="c57ec9a20533" blob="67a719551665" */}
-
-测试：`tests/workspace.test.ts` 测路径比较；切换本身要真的开着 ZCode，在隔离 home 里调命令验证（轨迹卡[「用启动参数切工作区」](/trajectory/2026-10-03-open-workspace-argument)）。
-
-## 对外能做什么
-
-`zcode.open` 把窗口切到一个工作区；`zcode.create` 在一个工作区里新建会话、发任务；`zcode.send` 在已有会话里接着发；`zcode.status` 读最新一轮的进度与回答；`zcode.archive` 归档一个会话。
-逐条的参数与回执在[命令](/docs/commands)，
-peer 写法在[插件之间怎么连](/docs/wiring)。
-
-## 依赖谁
-
-| 依赖 | 用来做什么 | 缺了会怎样 |
-| --- | --- | --- |
-| 命令总线 `gwb-commands`（必需） | 登记五条命令 | 插件不加载 |
-| 说明书 `gwb-skills`（局部注入） | 登记说明书 `zcode` | 照常加载；agent 读不到说明书 |
-| 内核包 `gwb-kernel-desktop` | 接口类型 | — |
-| ZCode 桌面端（本机安装、开着） | 一切：切工作区、建会话、切模式、发指令、读快照 | 命令报「应有一个 ZCode 主进程」 |
-| `pwsh` | 列进程找 ZCode 主进程 | 命令报「找 ZCode 主进程失败」 |
-
-## 不做的事
-
-- **不提供别的权限模式**：一律完全访问，没有模式参数（轨迹卡[「一律完全访问」](/trajectory/2026-10-02-full-access-only)）
-- **不一直等到 ZCode 做完**：发出即返回，结果用 `zcode.status` 查（轨迹卡[「发出即返回」](/trajectory/2026-10-02-dispatch-then-poll)）
-- **不取消任务、不列会话、不取消归档**：只做切工作区、派任务、查结果、归档
-- **不归档还在跑的会话**：归档后人就看不见它在执行
-- **不用 ZCode 的 CLI 无界面模式**：会话不进侧栏，人看不见（轨迹卡[「要侧栏可见」](/trajectory/2026-10-02-desktop-visible-over-cli)）
-- **不借定时自动化派任务**（轨迹卡[「不借定时任务」](/trajectory/2026-10-02-no-automation-detour)）
-- **不支持多个 ZCode 实例或多个工作区窗口**：遇到就报错，不替调用方挑
-- **不启动 ZCode**：没开就报错，由人打开；`zcode.open` 先确认主进程在，才运行第二个实例转交启动参数
-- **`zcode.create` 不替调用方切工作区**：切窗口会打断人正在看的界面，要不要切由调用方用 `zcode.open` 决定
+隔离 home 安装时，`devkit.dev` 的 `dir` 指向本仓，`packages` 可以选 `["plugins/zcode","plugins/claudecode"]` 或其中一个。
+迁入同仓不代表新功能已通过实机验证；Claude Code 与 QQ 的 B 回报链路仍在联调。

@@ -1,7 +1,7 @@
 ---
 title: ZCode 说明书（SKILL 正本）
 name: zcode
-description: 要把任务交给本机的 ZCode（另一个 AI 客户端，走 GLM 额度）去做时读：批量迁移、批量改代码这类能写清范围的任务。讲 zcode.open / create / send / status / archive 怎么用、任务说明怎么写、怎么轮询结果、做完怎么复查与归档。
+description: 要把任务交给本机的 ZCode（另一个 AI 客户端，走 GLM 额度）去做时读：批量迁移、批量改代码这类能写清范围的任务。讲 zcode.open / create / send / status / archive 怎么用、任务说明怎么写、怎么查询与主动回报结果、做完怎么复查与归档。
 ---
 
 # 给 ZCode 派任务
@@ -49,3 +49,14 @@ ZCode 说「做完了」不算数：自己跑一次它说跑过的检查，`git 
 一项一个会话，可以先把几项都 `create` 出去，再轮流 `status`：同一个 home 的命令共用连接，不同 home 各用自己的连接。命令结束只断开自己的连接，调试端口随 ZCode 退出关闭，不会因为一个 home 完成查询而中断另一个 home。别把几十项塞进一个会话，上下文越拖越长，后面容易乱。
 
 遇到连接断开或请求超时，发送可能已经完成，先核对侧栏或已知会话的 `zcode.status`，不要直接重发任务。
+
+
+## 给常驻通道主动回报
+
+QQ 与协作站派单在 create / send 中附加可选 `report: {id, callback, server}`：每轮唯一 id、已经登记的接收命令、ZCode 内指向派单 home 的 MCP 服务名。插件生成随机 ticket，保存到本 home 的 gwb-data，并自动把回报约定附到提示词。
+
+执行者在最终答复前经指定服务调用 `zcode.report {ticket,state,text}`。state 为 completed、failed 或 needs_input；text 是给发起人的结果摘要，最多 16000 字符。同票相同结果可重交，不同结果拒绝覆盖。ticket 只用于本轮回报，不写进 QQ、笔记或仓库。
+
+回执 recorded 表示已落盘，accepted 表示接收命令已成功接收；不代表 QQ 已送达或 ZCode 进程已停。接收插件加载时调内部 `zcode.report.replay {callback}` 补交未接收结果，无定时轮询。未带 report 的普通调用保留原有 status 查询方式。
+
+不要把不同 home 的入口混用；无法回报时保留同一 ticket 重试报告，不重复执行工作。桌面端崩溃或未调用 report 时只表示尚未回报，不能宣告完成。

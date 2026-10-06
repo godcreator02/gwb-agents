@@ -21,7 +21,7 @@ function zone(id: string, name: string, root: Root): Node {
 
 export default function Layout({ children }: { children: ReactNode }) {
   const tree: Root = {
-    name: 'gwb-zcode',
+    name: 'gwb-agents',
     children: [
       zone('docs', '现状', source.getPageTree()),
       zone('trajectory', '轨迹', sourceTrajectory.getPageTree()),

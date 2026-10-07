@@ -28,6 +28,11 @@ describe('parseSendArgs', () => {
     expect(parseSendArgs({ workspace: 'D:\\repo', task: 'sess_1', prompt: '接着干' })).toEqual({ workspace: 'D:\\repo', task: 'sess_1', prompt: '接着干' })
     expect(() => parseSendArgs({ workspace: 'D:\\repo', prompt: '接着干' })).toThrow('缺 task')
   })
+
+  it('interrupt 不给就不带，给了要是布尔', () => {
+    expect(parseSendArgs({ workspace: 'D:\\repo', task: 'sess_1', prompt: '停下改做这个', interrupt: true })).toEqual({ workspace: 'D:\\repo', task: 'sess_1', prompt: '停下改做这个', interrupt: true })
+    expect(() => parseSendArgs({ workspace: 'D:\\repo', task: 'sess_1', prompt: '停下', interrupt: 'yes' })).toThrow('interrupt 要是 true 或 false')
+  })
 })
 
 describe('parseArchiveArgs', () => {

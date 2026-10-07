@@ -1,0 +1,33 @@
+---
+born-at: 2026-10-07T18:10
+type: finding
+parent: [2026-10-02-gwb-zcode]
+label: send 立即发
+domain: 任务通道
+---
+
+## 背景
+
+派给 ZCode 的一个大任务（论文库迁移演练）只有一轮，中途它卡在一条读 22 MB 回执的命令上。派任务的 Claude 结束了那个进程，再用 `zcode.send` 告诉它别重发，
+这条纠正却排进了 ZCode 的队列，要等整个任务做完才读到。用户在 ZCode 界面上点了排队消息的「立即」才送到，并指出：
+
+> 你这不是立即发送的啊，卡在排队了
+
+然后要求现在就改插件。
+
+## 结论与边界
+
+- `zcode.send` 加可选参数 `interrupt`：为 `true` 时直接发会话命令 `sendText`、投递方式 `startNow`，ZCode 当场取消正在跑的工具调用、结束子进程，用这条指令开新的一轮，前面的上下文还在。缺省照旧排队
+- 会话命令的信封要带窗口自己的 `clientId`（`localStorage` 的 `zcode-v4-client-id:v1`），别的值宿主报 `fault.command.clientMismatch`
+- ZCode 收下了却没按 `startNow` 投递时报错并写明实际投递方式，不当成发出去了
+- 代价：它会打断正在跑的命令。说明书写明正在跑数据迁移、写盘这类中途打断会留下半截结果的命令时别用
+- 只加参数、不改已有参数与回执，按 gwb-release 升 y
+
+## 否掉的候选
+
+- **投递方式 `guide`（引导当前任务）**：最不打扰，但实测会话在跑命令时回执 `delivery: "queue"`，被降成了排队
+- **照界面的做法先排队再 `sendQueuedNow`**：拿 `sendText` 回执的 `inputId` 当队列项 id 报 `queue item text unavailable`，任务快照里也读不到队列，外部拿不到队列项 id
+
+## 依据
+
+探针 `probes/2610071730_send-now`：两条测试会话前台跑 `sleep`，中间分别发 `guide` 与 `startNow`，用 `zcode.status` 看收到时在干什么；`startNow` 那次 ZCode 回答「那条命令被打断了——工具结果显示命令被取消、子进程被要求停止」。

@@ -58,16 +58,16 @@ ZCode 插件对应包 `@godcreator/gwb-zcode`（`plugins/zcode/`，入口 `src/i
 ZCode 主进程是 Electron 里的 Node。9229 端口没开时，`process._debugProcess(pid)` 让它在不重启的情况下打开调试端口；开了以后经 WebSocket 发
 `Runtime.evaluate`。端口属于 ZCode 进程，可能同时被多个 home 或调试器使用。命令结束只断开自己的 WebSocket，端口随 ZCode 退出关闭：
 
-{/* ref file="../plugins/zcode/src/desktop.ts" lines="82-101" hash="2aa62398bdb6" blob="421ea020dcca" */}
+{/* ref file="../plugins/zcode/src/desktop.ts" lines="87-106" hash="2aa62398bdb6" blob="95d9cb735bab" */}
 
 连上后先核对端口确实属于刚才找到的那个 pid，别的程序占着 9229 就报错：
 
-{/* ref file="../plugins/zcode/src/desktop.ts" lines="190-192" hash="444caa77a869" blob="421ea020dcca" */}
+{/* ref file="../plugins/zcode/src/desktop.ts" lines="195-197" hash="444caa77a869" blob="95d9cb735bab" */}
 
 **同一 home 的并发命令共用一个连接**，最后一条结束才断开；不同 home 各用自己的连接。不能根据一个 home 的引用计数关闭整个端口，
 否则一个机器人完成查询会中断另一个的派发回执。也不再安排延迟关闭端口的脚本，避免紧接着到来的命令受到旧定时器影响：
 
-{/* ref file="../plugins/zcode/src/desktop.ts" lines="214-249" hash="a46299878854" blob="421ea020dcca" */}
+{/* ref file="../plugins/zcode/src/desktop.ts" lines="226-261" hash="a46299878854" blob="95d9cb735bab" */}
 
 清理连接失败只记告警、不盖过成功回执。WebSocket 断线立即拒绝正在等待的请求、清掉超时计时器；不自动重发任何指令，避免已经派出去的任务重复执行。
 连接与请求都有 30 秒等待上限。`tests/desktop.test.ts` 用两个独立插件实例验证跨 home 并发，并验证断线会立即报错。
@@ -76,23 +76,23 @@ ZCode 主进程是 Electron 里的 Node。9229 端口没开时，`process._debug
 
 在主进程里取 Electron 的 `BrowserWindow`，按页面地址认出工作区窗口，必须恰好一个：
 
-{/* ref file="../plugins/zcode/src/desktop.ts" lines="173-179" hash="f922dac801c5" blob="421ea020dcca" */}
+{/* ref file="../plugins/zcode/src/desktop.ts" lines="178-184" hash="f922dac801c5" blob="95d9cb735bab" */}
 
 然后在那个窗口里 `executeJavaScript`，从 React 的根节点沿 fiber 树广度优先找到 `memoizedProps.services` 下的服务，调它的方法，
 返回值按 JSON 带回。用到两个服务：`zcodeTaskService` 管任务（侧栏里的一条），`zcodeAgentService` 管会话背后的代理进程。
-**这一段完全依赖 ZCode 的内部结构**：React 树里服务挂在哪、服务叫什么，ZCode 升级都可能改，找不到时报错写明是这里：
+**这一段完全依赖 ZCode 的内部结构**：React 树里服务放在哪个组件的属性上、服务叫什么，ZCode 升级都可能改，找不到时报错写明是这里：
 
 {/* ref file="../plugins/zcode/src/desktop.ts" lines="24-25" hash="91e6ab54af71" blob="db862b814598" */}
 
-{/* ref file="../plugins/zcode/src/desktop.ts" lines="38-48" hash="ec001d7bb4d6" blob="db862b814598" */}
+{/* ref file="../plugins/zcode/src/desktop.ts" lines="41-51" hash="ec001d7bb4d6" blob="95d9cb735bab" */}
 
-{/* ref file="../plugins/zcode/src/desktop.ts" lines="193-197" hash="526d0309baef" blob="421ea020dcca" */}
+{/* ref file="../plugins/zcode/src/desktop.ts" lines="198-202" hash="526d0309baef" blob="95d9cb735bab" */}
 
 ### 5 窗口 → 会话
 
 `createTask` 必须带 `v4Create: true`，否则走旧的创建流程，发指令时报数据库关联错误；给它传 `mode` 不起作用：
 
-{/* ref file="../plugins/zcode/src/round.ts" lines="29-33" hash="329cae0cbfd0" blob="1835c595758d" */}
+{/* ref file="../plugins/zcode/src/round.ts" lines="31-35" hash="329cae0cbfd0" blob="89568f6fe74d" */}
 
 **完全访问以代理进程为准。**代理实际用的模式在 `zcodeAgentService.readSession` 的 `settings.mode.current`；任务的 `meta.mode`（侧栏与界面显示的那个）
 只在代理的模式真的变了时才更新，会落后——新会话继承到工作区上次用的 `yolo`、跑过的会话放一阵子再恢复，都可能代理是 `yolo`、界面显示「变更前确认」。
@@ -100,12 +100,20 @@ ZCode 主进程是 Electron 里的 Node。9229 端口没开时，`process._debug
 跑着的时候切到 `build`，那一瞬间的工具调用会停下等确认（轨迹卡[「模式与收尾信号」](/trajectory/2026-10-02-mode-and-round-signals)、
 [「显示模式会落回」](/trajectory/2026-10-02-displayed-mode-drifts)）：
 
-{/* ref file="../plugins/zcode/src/round.ts" lines="35-56" hash="4741228ff8df" blob="1835c595758d" */}
+{/* ref file="../plugins/zcode/src/round.ts" lines="37-58" hash="4741228ff8df" blob="89568f6fe74d" */}
 
 **发出后等这一轮开始了才交回。**`status` 把「最新一轮」切在最后一条用户消息上，刚发出的一两秒里快照还是上一轮；所以 `send` 每 0.5 秒读一次，
 看到这一轮的提问出现了才交回，30 秒还没出现（多半排在还在跑的上一轮后面）就先交回、带 `roundStarted: false`：
 
-{/* ref file="../plugins/zcode/src/round.ts" lines="68-92" hash="533d74f378a3" blob="1835c595758d" */}
+{/* ref file="../plugins/zcode/src/round.ts" lines="93-121" hash="0a9d6e917855" blob="89568f6fe74d" */}
+
+**`interrupt` 不走 `sendPrompt`。**会话还在跑时，`sendPrompt` 发的指令一律排进队列，这一轮做完才读到；`sendPrompt` 也不收投递方式。
+所以带 `interrupt` 时直接发会话命令 `sendText`，要求投递方式 `startNow`：ZCode 当场取消正在跑的工具调用、结束它的子进程，用这条指令开新的一轮，
+跟界面上排队消息的「立即」效果相同。投递方式另有 `guide`（引导当前任务），实测会话在跑命令时被降成排队，所以不用。
+会话命令的信封要带窗口自己的 `clientId`（存在窗口的 `localStorage` 里），别的值宿主报 `fault.command.clientMismatch`。
+ZCode 收下了却没按 `startNow` 投递时直接报错，写明它实际怎么投递的，不当成发出去了（探针 `probes/2610071730_send-now`）：
+
+{/* ref file="../plugins/zcode/src/round.ts" lines="70-91" hash="96b75ed4d4a7" blob="89568f6fe74d" */}
 
 **判断这一轮做完的难点在于 `status` 落后于消息**：转成 `completed` 时回答可能还没写进快照，而一轮里的回答按同一个消息 id 越写越长、写完才带上 `durationMs`。
 所以状态是结束类的、并且这一轮的助手消息都有 `durationMs` 才算做完；失败类状态不等回答；停在等人确认权限时也算停下了（完全访问下不该出现，出现了就是哪里不对）：
@@ -114,7 +122,7 @@ ZCode 主进程是 Electron 里的 Node。9229 端口没开时，`process._debug
 
 `status` 的 `mode` 同样报代理的模式，不报会落后的显示值：
 
-{/* ref file="../plugins/zcode/src/round.ts" lines="94-105" hash="c56d6db6f860" blob="1835c595758d" */}
+{/* ref file="../plugins/zcode/src/round.ts" lines="123-134" hash="c56d6db6f860" blob="89568f6fe74d" */}
 
 **归档用 `archiveTask`。**侧栏索引里那条的 `archived` 变成 1，会话记录不删。它的返回里没有 `archived`，所以归档后用 `listArchivedTasks` 看这条在不在已归档列表里；
 还在跑的会话不归档、直接报错，归档后它从侧栏消失，人就看不见它还在执行（轨迹卡[「加归档」](/trajectory/2026-10-02-archive-sessions)）：

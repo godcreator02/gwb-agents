@@ -25,6 +25,8 @@ export interface ZcodeTaskInput extends ZcodeWorkspaceInput {
 
 export interface ZcodeSendInput extends ZcodeTaskInput {
   prompt: string
+  /** true：不排队，当场取消这条会话正在跑的工具调用、用这条指令开新的一轮（同界面上排队消息的「立即」）；缺省排在当前这一轮后面 */
+  interrupt?: boolean
 }
 
 export interface ZcodeStatusInput extends ZcodeTaskInput {
@@ -51,7 +53,7 @@ export interface GwbZcodeApi {
   open(input: ZcodeWorkspaceInput): Promise<OpenedWorkspace>
   /** 新建会话并发出第一轮，这一轮在快照里开始了就交回，不等做完 */
   create(input: ZcodeCreateInput): Promise<SentRound>
-  /** 往已有会话续一轮；上一轮还在跑时 ZCode 自己把它排在后面 */
+  /** 往已有会话续一轮；上一轮还在跑时 ZCode 自己把它排在后面，interrupt 为 true 时打断上一轮立即发出 */
   send(input: ZcodeSendInput): Promise<SentRound>
   /** 读最新一轮：roundIsOver 为 true 才是做完，replies 最后一条是收尾的话 */
   status(input: ZcodeStatusInput): Promise<ZcodeRoundStatus>

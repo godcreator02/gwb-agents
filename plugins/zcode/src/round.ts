@@ -8,6 +8,8 @@ const START_WAIT_MS = 30_000
 const SNAPSHOT_MESSAGE_LIMIT = 50
 const CLIENT_MODE = 'desktop-continuous'
 const ASK_BEFORE_CHANGES_MODE = 'build'
+/** sendText 的投递方式之一：当场取消正在跑的工具调用、开新的一轮。另一种「引导当前任务」（guide）在跑命令时会被降成排队，不用 */
+const START_NOW_DELIVERY = 'startNow'
 export const RUNNING_STATUS = 'running'
 
 const sleep = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms))
@@ -65,21 +67,48 @@ export interface SentRound {
   roundStarted: boolean
 }
 
+/**
+ * 不排队、立即发：zcodeTaskService.sendPrompt 不收投递方式，只能直接发会话命令 sendText 并要求 startNow，
+ * 跟界面上排队消息的「立即」效果相同。ZCode 收下了却没按 startNow 投递（比如排进了队列）就报错，写明它实际怎么投递的
+ */
+async function sendInterrupting(services: DesktopServices, workspace: string, taskId: string, prompt: string): Promise<void> {
+  const reply = (await services.call('zcodeAgentService', 'sendConversationCommandV4', {
+    workspacePath: workspace,
+    clientMode: CLIENT_MODE,
+    envelope: {
+      commandId: crypto.randomUUID(),
+      clientId: await services.readConversationClientId(),
+      sessionId: taskId,
+      type: 'sendText',
+      payload: { text: prompt, requestedDelivery: START_NOW_DELIVERY, heldQueueDisposition: 'keepQueueAndSend' },
+      issuedAt: Date.now(),
+    },
+  })) as { status?: unknown; result?: { delivery?: unknown } }
+  if (reply.status !== 'accepted') throw new Error(`ZCode 没收下这条指令：${JSON.stringify(reply)}`)
+  if (reply.result?.delivery !== START_NOW_DELIVERY) {
+    throw new Error(`ZCode 收下了这条指令，但没有立即发出，而是按 ${JSON.stringify(reply.result?.delivery)} 投递（多半排进了队列）：${JSON.stringify(reply)}`)
+  }
+}
+
 /** 切到完全访问、发出指令，等这一轮在快照里开始了就交回，不等它做完 */
 export async function sendRound(
   services: DesktopServices,
-  { workspace, taskId, prompt }: { workspace: string; taskId: string; prompt: string },
+  { workspace, taskId, prompt, interrupt = false }: { workspace: string; taskId: string; prompt: string; interrupt?: boolean },
 ): Promise<SentRound> {
   const agentMode = await switchToFullAccess(services, workspace, taskId)
   const messageIdsBeforeSend = messageIds(await snapshotOf(services, workspace, taskId))
-  await services.call('zcodeTaskService', 'sendPrompt', {
-    taskId,
-    content: prompt,
-    traceId: crypto.randomUUID(),
-    queryId: crypto.randomUUID(),
-    messageId: crypto.randomUUID(),
-    clientMode: CLIENT_MODE,
-  })
+  if (interrupt) {
+    await sendInterrupting(services, workspace, taskId, prompt)
+  } else {
+    await services.call('zcodeTaskService', 'sendPrompt', {
+      taskId,
+      content: prompt,
+      traceId: crypto.randomUUID(),
+      queryId: crypto.randomUUID(),
+      messageId: crypto.randomUUID(),
+      clientMode: CLIENT_MODE,
+    })
+  }
   const deadline = Date.now() + START_WAIT_MS
   for (;;) {
     const snapshot = await snapshotOf(services, workspace, taskId)

@@ -44,7 +44,11 @@ export function registerZcodeCommands(ctx: GwbContext, zcode: GwbZcodeApi): void
     {
       name: 'zcode.send',
       description: '在 ZCode 桌面端的一个已有会话里接着发指令（先切到完全访问），发出即返回',
-      usage: '参数 { workspace: string, task: string, prompt: string }。task 是 zcode.create 回执里的 taskId，workspace 写建它时的那个目录。' + SENT_SHAPE,
+      usage:
+        '参数 { workspace: string, task: string, prompt: string, interrupt?: boolean }。task 是 zcode.create 回执里的 taskId，workspace 写建它时的那个目录。' +
+        '会话还在跑时，不给 interrupt 新指令排在这一轮后面，等这一轮做完才读到；interrupt 为 true 就不排队：当场取消正在跑的命令或工具调用（子进程被结束），用这条指令开新的一轮，前面的上下文还在，' +
+        '同界面上排队消息的「立即」。中途纠正派出去的任务用它；正在跑数据迁移、写盘这类中途打断会留下半截结果的命令时别用。ZCode 没按立即发出（比如排进了队列）就报错并写明实际怎么投递的。' +
+        SENT_SHAPE,
       effect: 'external',
     },
     async (raw) => ({ ok: true, data: await zcode.send(parseSendArgs(raw)) }),

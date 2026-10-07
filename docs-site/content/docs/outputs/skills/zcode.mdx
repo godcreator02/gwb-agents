@@ -31,7 +31,9 @@ description: 要把任务交给本机的 ZCode（另一个 AI 客户端，走 GL
 ## 接着干
 
 - 同一个会话续上：`zcode.send {"workspace":"<建它时的目录>","task":"<taskId>","prompt":"<接着做什么>"}`，ZCode 记得前面几轮；之后照样用 `status` 轮询
-- 上一轮还没做完就 `send`，新指令排在后面，回执 `roundStarted` 可能是 `false`：这时 `status` 读到的还是上一轮，等它做完再查
+- 上一轮还没做完就 `send`，新指令排在后面，等这一轮做完才读到，回执 `roundStarted` 可能是 `false`：这时 `status` 读到的还是上一轮，等它做完再查
+- **派出去的任务要中途纠正**（说明写漏了、卡在没用的命令上）：`send` 带 `"interrupt":true`，不排队，当场取消它正在跑的命令、用这条指令开新的一轮，前面的上下文还在（同界面上排队消息的「立即」）。
+  不带它的话，一个任务只有一轮时，纠正要等整个任务做完才送到。它正在跑数据迁移、写盘这类中途打断会留下半截结果的命令时别用；自己替它结束了卡住的进程，也要这样告诉它一声
 - `pendingPermissions` 非空：停在等人确认，请用户去 ZCode 界面处理
 - `status` 是 `failed` / `error`：读 `replies`，改说明后 `send` 重来
 

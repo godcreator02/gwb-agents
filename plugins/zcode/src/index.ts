@@ -69,11 +69,11 @@ export default class GwbZcode extends Service implements GwbZcodeApi {
     })
   }
 
-  async send({ workspace, task, prompt }: ZcodeSendInput): Promise<SentRound> {
+  async send({ workspace, task, prompt, interrupt = false }: ZcodeSendInput): Promise<SentRound> {
     requireExistingWorkspace(workspace)
     return withDesktop(this.logWarn, async (services) => {
-      this.logInfo(`往会话 ${task} 发指令`)
-      return sendRound(services, { workspace, taskId: task, prompt })
+      this.logInfo(interrupt ? `打断会话 ${task} 当前这一轮、立即发指令` : `往会话 ${task} 发指令`)
+      return sendRound(services, { workspace, taskId: task, prompt, interrupt })
     })
   }
 

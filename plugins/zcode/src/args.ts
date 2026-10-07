@@ -26,6 +26,12 @@ function optionalNumber(commandName: string, key: string, value: unknown): numbe
   return value
 }
 
+function optionalBoolean(commandName: string, key: string, value: unknown): boolean | undefined {
+  if (value === undefined) return undefined
+  if (typeof value !== 'boolean') throw new Error(`${commandName} 的 ${key} 要是 true 或 false，收到 ${JSON.stringify(value)}`)
+  return value
+}
+
 const WORKSPACE_MEANING = '工作区目录的绝对路径'
 const TASK_MEANING = 'zcode.create 回执里的 taskId（sess_ 开头）'
 
@@ -46,11 +52,13 @@ export function parseCreateArgs(raw: unknown): ZcodeCreateInput {
 
 export function parseSendArgs(raw: unknown): ZcodeSendInput {
   const commandName = 'zcode.send'
-  const obj = objectArgs(commandName, raw, ['workspace', 'task', 'prompt'])
+  const obj = objectArgs(commandName, raw, ['workspace', 'task', 'prompt', 'interrupt'])
+  const interrupt = optionalBoolean(commandName, 'interrupt', obj['interrupt'])
   return {
     workspace: requireNonEmptyString(commandName, 'workspace', obj['workspace'], WORKSPACE_MEANING),
     task: requireNonEmptyString(commandName, 'task', obj['task'], TASK_MEANING),
     prompt: requireNonEmptyString(commandName, 'prompt', obj['prompt'], '发给 ZCode 的指令'),
+    ...(interrupt === undefined ? {} : { interrupt }),
   }
 }
 

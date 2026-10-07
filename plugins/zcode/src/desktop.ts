@@ -35,6 +35,9 @@ const READ_ACTIVE_WORKSPACE_PATHS = `(()=>{
   return [...paths];
 })()`
 
+/** 窗口发会话命令用的 clientId 存在它的 localStorage 里；宿主只收这个窗口的 clientId，别的报 fault.command.clientMismatch */
+const READ_CONVERSATION_CLIENT_ID = `localStorage.getItem('zcode-v4-client-id:v1')`
+
 function findServiceInRenderer(serviceName: DesktopServiceName): string {
   return `(()=>{
   const root=document.getElementById('root');
@@ -51,6 +54,8 @@ export interface DesktopServices {
   call(service: DesktopServiceName, method: string, args: unknown): Promise<unknown>
   /** 窗口当前的工作区目录 */
   readActiveWorkspacePath(): Promise<string>
+  /** 窗口发会话命令（zcodeAgentService.sendConversationCommandV4 的信封）用的 clientId */
+  readConversationClientId(): Promise<string>
   /** ZCode 主进程的 ZCode.exe 路径 */
   executablePath: string
 }
@@ -202,8 +207,15 @@ async function openConnection(): Promise<OpenConnection> {
       }
       return paths[0]
     }
+    const readConversationClientId = async (): Promise<string> => {
+      const clientId = await evaluateInWindow(READ_CONVERSATION_CLIENT_ID)
+      if (typeof clientId !== 'string' || clientId === '') {
+        throw new Error('窗口的 localStorage 里没有 zcode-v4-client-id:v1，ZCode 内部结构可能变了')
+      }
+      return clientId
+    }
     const executablePath = (await socket.evaluate('process.execPath')) as string
-    return { call, readActiveWorkspacePath, executablePath, close }
+    return { call, readActiveWorkspacePath, readConversationClientId, executablePath, close }
   } catch (error) {
     // 核对没过只断开自己的连接，不在未知进程里执行关闭端口的脚本。
     await close().catch(() => undefined)

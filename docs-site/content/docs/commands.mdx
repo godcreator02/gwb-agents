@@ -12,7 +12,7 @@ description: zcode.open、zcode.create、zcode.send、zcode.status、zcode.archi
 
 把 ZCode 窗口切到一个工作区。侧栏只显示当前工作区的会话：`zcode.create` 在哪个目录建会话，人就要切到哪个目录才看得见。
 
-{/* ref file="../plugins/zcode/src/args.ts" lines="32-36" hash="cb4987665526" blob="9f5f8a9bc7ec" */}
+{/* ref file="../plugins/zcode/src/args.ts" lines="38-42" hash="cb4987665526" blob="ed4e0f1e507f" */}
 
 | 参数 | 必给 | 说明 |
 | --- | --- | --- |
@@ -24,7 +24,7 @@ description: zcode.open、zcode.create、zcode.send、zcode.status、zcode.archi
 
 在一个工作区里新建会话、切到完全访问、发出任务，等这一轮在 ZCode 里开始了就交回。
 
-{/* ref file="../plugins/zcode/src/args.ts" lines="38-45" hash="1dff313b8054" blob="9f5f8a9bc7ec" */}
+{/* ref file="../plugins/zcode/src/args.ts" lines="44-51" hash="1dff313b8054" blob="ed4e0f1e507f" */}
 
 | 参数 | 必给 | 说明 |
 | --- | --- | --- |
@@ -38,7 +38,16 @@ description: zcode.open、zcode.create、zcode.send、zcode.status、zcode.archi
 在已有会话里接着发指令。`task` 是 `zcode.create` 回执里的 `taskId`，`workspace` 写建它时的那个目录；发之前同样切到完全访问——
 人在界面上把模式改过了也会被切回来。
 
-{/* ref file="../plugins/zcode/src/args.ts" lines="47-55" hash="a1e09153a147" blob="9f5f8a9bc7ec" */}
+{/* ref file="../plugins/zcode/src/args.ts" lines="53-63" hash="1116975434dc" blob="ed4e0f1e507f" */}
+
+| 参数 | 必给 | 说明 |
+| --- | --- | --- |
+| `workspace`、`task` | 是 | 建会话时的目录与 `taskId` |
+| `prompt` | 是 | 指令，非空 |
+| `interrupt` | 否 | 布尔。缺省：会话还在跑时，新指令排在这一轮后面，这一轮做完才读到。`true`：不排队，当场取消正在跑的命令或工具调用（子进程被结束），用这条指令开新的一轮，前面的上下文还在；同界面上排队消息的「立即」 |
+
+`interrupt` 用来中途纠正派出去的任务：发出去的说明写漏了、它卡在一条没用的命令上，排队要等整个任务做完才送得到。
+正在跑数据迁移、写盘这类中途打断会留下半截结果的命令时别用。
 
 两条派任务的命令回执相同：
 
@@ -56,7 +65,7 @@ description: zcode.open、zcode.create、zcode.send、zcode.status、zcode.archi
 
 读一个会话最新一轮（最后一条用户消息之后）的进度与回答。
 
-{/* ref file="../plugins/zcode/src/args.ts" lines="57-68" hash="1de839998cd6" blob="9f5f8a9bc7ec" */}
+{/* ref file="../plugins/zcode/src/args.ts" lines="65-76" hash="1de839998cd6" blob="ed4e0f1e507f" */}
 
 {/* ref file="../plugins/zcode/src/checks.ts" lines="16-24" hash="ab1bc4849587" blob="46c2c86d4f9d" */}
 
@@ -87,7 +96,7 @@ ZCode 会把这一轮的工具调用记录（工具名、输入、输出）也�
 把一个会话从 ZCode 侧栏的会话列表里收起来，记录不删，在 ZCode 的已归档列表里还看得到。参数 `workspace`、`task` 同 `zcode.send`，
 只是 `workspace` 那个目录已经删了也行：它只是 ZCode 记会话用的键，归档不在目录里执行任何东西。
 
-{/* ref file="../plugins/zcode/src/args.ts" lines="70-77" hash="3ea413b42ce3" blob="9f5f8a9bc7ec" */}
+{/* ref file="../plugins/zcode/src/args.ts" lines="78-85" hash="3ea413b42ce3" blob="ed4e0f1e507f" */}
 
 回 `{ taskId, title, archived: true }`。还在跑（`status` 为 `running`）的会话直接报错，等 `zcode.status` 的 `roundIsOver` 为 `true` 再归档；
 已经归档过的再调一次照样成功。
@@ -105,6 +114,8 @@ ZCode 会把这一轮的工具调用记录（工具名、输入、输出）也�
 | `找不到 services.…`、`快照形状不对`、`没有 settings.mode.current`、`没回 taskId`、`activeWorkspacePath 应有一个值` | ZCode 升级改了内部结构，插件要跟着改 |
 | `秒后窗口的工作区仍是` | ZCode 没按启动参数切过去，可能改了启动参数的处理；请用户手动切 |
 | `切换到完全访问 … 后代理的模式是` | 模式没切成，指令没发出 |
+| `收下了这条指令，但没有立即发出` | 带 `interrupt` 时 ZCode 没按立即投递，指令已经按回执里写的方式（多半是排队）收下；不要重发 |
+| `localStorage 里没有 zcode-v4-client-id:v1` | ZCode 升级改了内部结构，`interrupt` 要跟着改 |
 | `还在跑，等这一轮做完 … 再归档` | 用 `zcode.status` 等它做完再 `zcode.archive` |
 | `调过 archiveTask 之后不在 … 的已归档列表里` | `workspace` 不是建这个会话时的目录，或 ZCode 改了归档的做法 |
 | `调试协议请求 … 无响应` | 先去 ZCode 侧栏看指令有没有发出去，再决定要不要重调 |

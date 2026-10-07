@@ -43,6 +43,8 @@ description: gwb-zcode 提供的服务、命令与说明书，注入的服务与
 | 服务方法 | `zcodeTaskService` | `createTask`、`setMode`、`sendPrompt`、`getTaskSnapshot` | 建会话、切模式、发指令、读快照 |
 | 服务方法 | `zcodeTaskService` | `archiveTask`、`listArchivedTasks` | 归档会话、读回已归档列表核对 |
 | 服务方法 | `zcodeAgentService` | `readSession` | 读代理进程实际用的模式 |
+| 服务方法 | `zcodeAgentService` | `sendConversationCommandV4`，信封的 `type` 是 `sendText`、`payload.requestedDelivery` 是 `startNow` | `send` 带 `interrupt` 时打断当前这一轮立即发指令 |
+| 窗口存储 | ZCode 工作区窗口 | `localStorage` 的 `zcode-v4-client-id:v1` | 会话命令信封的 `clientId`，宿主只收这个窗口的 |
 | 快照字段 | `getTaskSnapshot` | `meta.mode`、`meta.status`、消息的 `durationMs` | 显示的模式、任务状态、一条回答写完没有 |
 | 会话字段 | `readSession` | `settings.mode.current` | 代理实际用的模式（`session.mode` 可能是旧值） |
 | 模式值 | 两个服务 | `yolo`、`build` | 界面上的「完全访问」「变更前确认」 |

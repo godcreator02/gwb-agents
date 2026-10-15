@@ -7,7 +7,7 @@ description: 让别的插件（服务 gwbZcode）与 agent（zcode.* 命令）�
 
 ZCode 是本机装的另一个 AI 编程客户端（Electron 桌面端，模型走用户的 GLM 套餐）。把批量的任务交给它，能省下派任务一方自己的模型额度。
 ZCode 没有给外部用的建任务入口：启动参数与深链接只能打开工作区，本机也没有它的接口端口；能让任务出现在侧栏里、人看得见的，只有它客户端窗口里
-自己的服务。所以这个插件打开 ZCode 主进程的 Node 调试端口，在窗口里执行脚本调这些服务——
+自己的服务。所以 ZCode 要带 `--remote-debugging-port=9339` 启动，这个插件连上窗口页面的远程调试端口，在窗口里执行脚本调这些服务——
 这条路怎么找到的、为什么不用 CLI 无界面或定时自动化，见轨迹区。
 
 ZCode 插件对应包 `@godcreator/gwb-zcode`（`plugins/zcode/`，入口 `src/index.ts`）。本体是 cordis 服务 `gwbZcode`，五个方法：`open` 把窗口切到一个工作区，
@@ -46,49 +46,45 @@ ZCode 插件对应包 `@godcreator/gwb-zcode`（`plugins/zcode/`，入口 `src/i
 
 ### 2 插件 → 进程表
 
-调试端口要开在 ZCode 主进程上，先找到它的 pid。ZCode 一开就是十几个 `ZCode.exe`（渲染进程、GPU 进程、每个会话一个 `zcode.cjs app-server`），
-主进程是命令行里没有 `--type=`、`zcode.cjs`、`windows-helper` 的那一个。剩下不是恰好一个就报错，不猜：
+先找到 ZCode 主进程。ZCode 一开就是十几个 `ZCode.exe`（渲染进程、GPU 进程、utility 进程、以 Node 方式运行的 `zcode.cjs`），
+主进程是命令行里没有 `--type=`、`zcode.cjs`、`windows-helper` 的那一个。剩下不是恰好一个就报错，不猜；读出它的 `ZCode.exe` 路径与命令行：
 
-{/* ref file="../plugins/zcode/src/desktop.ts" lines="15-17" hash="fcb66fbc34fb" blob="1cb48af3256e" */}
+{/* ref file="../plugins/zcode/src/desktop.ts" lines="17-20" hash="d7dc3d04ccab" blob="4d4211325757" */}
 
-没有自动测试：要真的开着 ZCode。在隔离 home 里调命令验证。
+主进程的命令行里必须有 `--remote-debugging-port=9339`：窗口页面的调试端口只有 ZCode 启动时带上这个参数才有，插件不开端口、也不替人重启 ZCode。
+主进程自己的 Node 调试端口打不开——ZCode 3.15.3 关掉了 Electron 的 fuse `EnableNodeCliInspectArguments`，从外部调 `_debugProcess` 报「找不到文件」
+（探针 `probes/2610152340_zcode-inspect-fuse`）。没带参数就报错，写明用哪个 `ZCode.exe`、带什么参数重开，以及 ZCode 自动更新后重启会丢掉它
+（轨迹卡[「改连窗口页面」](/trajectory/2026-10-16-remote-debugging-port)）：
 
-### 3 插件 → 主进程（调试端口）
+{/* ref file="../plugins/zcode/src/desktop.ts" lines="88-95" hash="4656ce689b2c" blob="4d4211325757" */}
 
-ZCode 主进程是 Electron 里的 Node。9229 端口没开时，`process._debugProcess(pid)` 让它在不重启的情况下打开调试端口；开了以后经 WebSocket 发
-`Runtime.evaluate`。端口属于 ZCode 进程，可能同时被多个 home 或调试器使用。命令结束只断开自己的 WebSocket，端口随 ZCode 退出关闭：
+测试：`tests/desktop.test.ts` 测参数核对，缺参数、端口号不同都报错。找进程要真的开着 ZCode，在隔离 home 里调命令验证。
 
-{/* ref file="../plugins/zcode/src/desktop.ts" lines="87-106" hash="2aa62398bdb6" blob="95d9cb735bab" */}
+### 3 插件 → 工作区窗口（远程调试端口）
 
-连上后先核对端口确实属于刚才找到的那个 pid，别的程序占着 9229 就报错：
+9339 是 Chromium 的远程调试端口，`/json/list` 列出 ZCode 打开的每个页面。按类型 `page`、地址含 `/out/renderer/index.html` 认出工作区窗口，必须恰好一个：
 
-{/* ref file="../plugins/zcode/src/desktop.ts" lines="195-197" hash="444caa77a869" blob="95d9cb735bab" */}
+{/* ref file="../plugins/zcode/src/desktop.ts" lines="103-109" hash="1acde85549fa" blob="4d4211325757" */}
 
-**同一 home 的并发命令共用一个连接**，最后一条结束才断开；不同 home 各用自己的连接。不能根据一个 home 的引用计数关闭整个端口，
-否则一个机器人完成查询会中断另一个的派发回执。也不再安排延迟关闭端口的脚本，避免紧接着到来的命令受到旧定时器影响：
-
-{/* ref file="../plugins/zcode/src/desktop.ts" lines="226-261" hash="a46299878854" blob="95d9cb735bab" */}
-
-清理连接失败只记告警、不盖过成功回执。WebSocket 断线立即拒绝正在等待的请求、清掉超时计时器；不自动重发任何指令，避免已经派出去的任务重复执行。
-连接与请求都有 30 秒等待上限。`tests/desktop.test.ts` 用两个独立插件实例验证跨 home 并发，并验证断线会立即报错。
-
-### 4 主进程 → 工作区窗口
-
-在主进程里取 Electron 的 `BrowserWindow`，按页面地址认出工作区窗口，必须恰好一个：
-
-{/* ref file="../plugins/zcode/src/desktop.ts" lines="178-184" hash="f922dac801c5" blob="95d9cb735bab" */}
-
-然后在那个窗口里 `executeJavaScript`，从 React 的根节点沿 fiber 树广度优先找到 `memoizedProps.services` 下的服务，调它的方法，
+连上这个页面的 WebSocket，发 `Runtime.evaluate` 直接在页面里执行：从 React 的根节点沿 fiber 树广度优先找到 `memoizedProps.services` 下的服务，调它的方法，
 返回值按 JSON 带回。用到两个服务：`zcodeTaskService` 管任务（侧栏里的一条），`zcodeAgentService` 管会话背后的代理进程。
 **这一段完全依赖 ZCode 的内部结构**：React 树里服务放在哪个组件的属性上、服务叫什么，ZCode 升级都可能改，找不到时报错写明是这里：
 
-{/* ref file="../plugins/zcode/src/desktop.ts" lines="24-25" hash="91e6ab54af71" blob="db862b814598" */}
+{/* ref file="../plugins/zcode/src/desktop.ts" lines="25-26" hash="91e6ab54af71" blob="4d4211325757" */}
 
-{/* ref file="../plugins/zcode/src/desktop.ts" lines="41-51" hash="ec001d7bb4d6" blob="95d9cb735bab" */}
+{/* ref file="../plugins/zcode/src/desktop.ts" lines="42-52" hash="ec001d7bb4d6" blob="4d4211325757" */}
 
-{/* ref file="../plugins/zcode/src/desktop.ts" lines="198-202" hash="526d0309baef" blob="95d9cb735bab" */}
+{/* ref file="../plugins/zcode/src/desktop.ts" lines="195-196" hash="0e94304281e9" blob="4d4211325757" */}
 
-### 5 窗口 → 会话
+端口归 ZCode 进程所有，随它退出关闭，可能同时被多个 home 或调试器使用。**同一 home 的并发命令共用一个连接**，最后一条结束只断开自己的 WebSocket；
+不同 home 各用自己的连接，一个机器人完成查询不会中断另一个的派发回执：
+
+{/* ref file="../plugins/zcode/src/desktop.ts" lines="215-250" hash="a46299878854" blob="4d4211325757" */}
+
+清理连接失败只记告警、不盖过成功回执。WebSocket 断线立即拒绝正在等待的请求、清掉超时计时器；不自动重发任何指令，避免已经派出去的任务重复执行。
+连接与请求都有 30 秒等待上限。`tests/desktop.test.ts` 用两个独立插件实例验证跨 home 并发，验证断线会立即报错，并测只认恰好一个工作区页面。
+
+### 4 窗口 → 会话
 
 `createTask` 必须带 `v4Create: true`，否则走旧的创建流程，发指令时报数据库关联错误；给它传 `mode` 不起作用：
 
@@ -133,24 +129,24 @@ ZCode 收下了却没按 `startNow` 投递时直接报错，写明它实际怎�
 
 {/* ref file="../plugins/zcode/tests/task-progress.test.ts" lines="15-40" hash="f647690a2cd0" blob="2259aedb7c24" */}
 
-### 6 插件 → 说明书插件
+### 5 插件 → 说明书插件
 
 局部注入 `gwbSkills`，登记包里的 `skills/` 目录（相对产物写作 `'../skills/'`，所以 `skills` 在 `package.json` 的 `files` 里）。
 说明书 `zcode` 告诉 agent 什么时候派任务、任务说明怎么写、怎么查询结果、回执怎么读。缺了说明书插件，服务与命令照常可用：
 
 {/* ref file="../plugins/zcode/src/index.ts" lines="50-52" hash="9cc8f78c4e7c" blob="2ab820cf079c" */}
 
-### 7 插件 → 主进程（启动参数）
+### 6 插件 → 主进程（启动参数）
 
 切工作区不调窗口里的服务，用 ZCode 自己认的启动参数：运行一次 `ZCode.exe --open-workspace <目录>`，ZCode 只允许一个实例，
-这个第二个实例把参数转给正在运行的主进程就退出，窗口切到那个工作区，不多开窗口。`ZCode.exe` 的路径取主进程的 `process.execPath`：
+这个第二个实例把参数转给正在运行的主进程就退出，窗口切到那个工作区，不多开窗口。`ZCode.exe` 的路径用接缝 2 从进程表读到的主进程路径：
 
-{/* ref file="../plugins/zcode/src/desktop.ts" lines="21-22" hash="c4947221bbfa" blob="db862b814598" */}
+{/* ref file="../plugins/zcode/src/desktop.ts" lines="22-23" hash="c4947221bbfa" blob="4d4211325757" */}
 
-切没切成以窗口自己的状态为准：经接缝 3、4 在窗口里沿 React 树读组件的 `activeWorkspacePath`，几个组件都带着它，值必须恰好一种，
+切没切成以窗口自己的状态为准：经接缝 3 在窗口里沿 React 树读组件的 `activeWorkspacePath`，几个组件都带着它，值必须恰好一种，
 否则说明 ZCode 内部结构变了、直接报错：
 
-{/* ref file="../plugins/zcode/src/desktop.ts" lines="27-36" hash="ac66b6d73ced" blob="db862b814598" */}
+{/* ref file="../plugins/zcode/src/desktop.ts" lines="28-37" hash="ac66b6d73ced" blob="4d4211325757" */}
 
 窗口本来就在这个工作区就不运行；运行后每 0.25 秒读一次，10 秒内没切过去就报错。路径比较不分大小写、不管结尾的分隔符：
 
@@ -172,7 +168,7 @@ ZCode 收下了却没按 `startNow` 投递时直接报错，写明它实际怎�
 | `cordis` | 服务基类 `Service` | — |
 | 说明书 `gwb-skills`（局部注入） | 登记说明书 `zcode` | 照常加载；agent 读不到说明书 |
 | 内核包 `gwb-kernel-desktop` | 接口类型 | — |
-| ZCode 桌面端（本机安装、开着） | 一切：切工作区、建会话、切模式、发指令、读快照 | 命令报「应有一个 ZCode 主进程」 |
+| ZCode 桌面端（本机安装、开着，带 `--remote-debugging-port=9339` 启动） | 一切：切工作区、建会话、切模式、发指令、读快照 | 没开报「应有一个 ZCode 主进程」；没带参数报「ZCode 不是带 … 启动的」并写明怎么重开 |
 | `pwsh` | 列进程找 ZCode 主进程 | 命令报「找 ZCode 主进程失败」 |
 
 ## 不做的事
@@ -184,7 +180,7 @@ ZCode 收下了却没按 `startNow` 投递时直接报错，写明它实际怎�
 - **不用 ZCode 的 CLI 无界面模式**：会话不进侧栏，人看不见（轨迹卡[「要侧栏可见」](/trajectory/2026-10-02-desktop-visible-over-cli)）
 - **不借定时自动化派任务**（轨迹卡[「不借定时任务」](/trajectory/2026-10-02-no-automation-detour)）
 - **不支持多个 ZCode 实例或多个工作区窗口**：遇到就报错，不替调用方挑
-- **不启动 ZCode**：没开就报错，由人打开；`zcode.open` 先确认主进程在，才运行第二个实例转交启动参数
+- **不启动、不重启 ZCode**：没开、没带调试参数都报错，由人打开或重开；`zcode.open` 先确认主进程在，才运行第二个实例转交启动参数
 - **`create` 不替调用方切工作区**：切窗口会打断人正在看的界面，要不要切由调用方用 `open` 决定
 - **不管占用**：同一个工作区可以同时开几条会话（批量派活就是同一目录几条并行），会不会改到同一个文件由派任务的一方安排（轨迹卡[「删掉占用表」](/trajectory/2026-10-07-drop-workspace-occupancy)）
 - **不参与回报**：要不要回报、报给谁，由派任务的一方写进任务说明；本插件不保存凭证、不转发结果，也不认识任何上层应用

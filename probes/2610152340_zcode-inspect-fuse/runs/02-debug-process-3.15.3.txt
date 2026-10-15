@@ -1,0 +1,11 @@
+42224	主进程	拒绝：The system cannot find the file specified.
+66396	crashpad-handler	拒绝：The system cannot find the file specified.
+57608	gpu-process	拒绝：The system cannot find the file specified.
+63008	utility	拒绝：The system cannot find the file specified.
+44868	renderer	拒绝：The system cannot find the file specified.
+62072	utility	拒绝：The system cannot find the file specified.
+37320	utility	拒绝：The system cannot find the file specified.
+62824	zcode.cjs 子进程	接受
+36056	zcode.cjs 子进程	接受
+56232	zcode.cjs 子进程	接受
+58924	utility	拒绝：The system cannot find the file specified.

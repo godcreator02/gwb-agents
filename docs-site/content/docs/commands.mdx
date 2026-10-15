@@ -4,7 +4,8 @@ description: zcode.open、zcode.create、zcode.send、zcode.status、zcode.archi
 ---
 
 **本页回答**：五条公开命令各收什么参数、回什么、什么情况下报错。每条命令只查参数形状，然后调服务 `gwbZcode` 的同名方法，参数与回执和方法一样；别的插件直接 inject 服务，不经命令。派任务的两条 `effect` 是 `external`：指令经 ZCode 发给外部的模型服务，ZCode 还会以完全访问权限改本机文件；
-`zcode.open` 改 ZCode 窗口显示的工作区，标 `write`；`zcode.status` 不改数据，但同样会按需打开 ZCode 主进程的本机调试端口，标 `write`；`zcode.archive` 改 ZCode 的任务索引，标 `write`。命令结束断开自己的连接，调试端口随 ZCode 退出关闭，避免影响其他 home。
+`zcode.open` 改 ZCode 窗口显示的工作区，标 `write`；`zcode.status` 只读快照，标 `read`；`zcode.archive` 改 ZCode 的任务索引，标 `write`。
+五条命令都要 ZCode 带 `--remote-debugging-port=9339` 启动：插件只连这个端口，不开也不关；命令结束断开自己的连接，不影响其他 home。
 
 一次派任务的流程：要让人在侧栏里看见就先 `open` 那个目录 → `create`（或 `send`）拿到 `taskId` → 按需查 `status` → 不再用的会话 `archive`。要不要回报、报给谁由派任务的一方写进任务说明，这些命令不参与。
 
@@ -110,6 +111,8 @@ ZCode 会把这一轮的工具调用记录（工具名、输入、输出）也�
 | `不认识参数`、`缺 …`、`要是绝对路径`、`不是已存在的目录`、`waitSeconds`、`replyTailChars` | 照文本改参数 |
 | `zcode.status` 的返回超过单次返回的上限 | 带上 `replyTailChars`（如 20000）再调 |
 | `应有一个 ZCode 主进程` | ZCode 没开，或开了多个实例：请用户打开或关掉多余的 |
+| `ZCode 不是带 --remote-debugging-port=9339 启动的` | 请用户关掉 ZCode，照文本里的命令带参数重开；ZCode 自动更新后重启也会这样 |
+| `命令行带着 --remote-debugging-port=9339，但 … 连不上` | 端口被别的程序先占了，或 ZCode 还没启动完：稍后再调，仍不行请用户重开 ZCode |
 | `应有一个 ZCode 工作区窗口` | 请用户关掉多余的 ZCode 窗口 |
 | `找不到 services.…`、`快照形状不对`、`没有 settings.mode.current`、`没回 taskId`、`activeWorkspacePath 应有一个值` | ZCode 升级改了内部结构，插件要跟着改 |
 | `秒后窗口的工作区仍是` | ZCode 没按启动参数切过去，可能改了启动参数的处理；请用户手动切 |

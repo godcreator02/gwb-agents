@@ -2,21 +2,22 @@ import { execFile } from 'node:child_process'
 import { promisify } from 'node:util'
 
 /**
- * 连到运行中的 ZCode 桌面端：给主进程打开 Node 调试端口 9229，经 Electron 在工作区窗口里执行脚本，
- * 调客户端自己的服务。ZCode 没有给外部用的建任务入口，这是唯一能让任务进侧栏的办法，
+ * 连到运行中的 ZCode 桌面端：经 Chromium 远程调试端口直接在工作区窗口的页面里执行脚本，调客户端自己的服务。
+ * ZCode 没有给外部用的建任务入口，这是能让任务进侧栏的办法；端口要 ZCode 启动时带上 --remote-debugging-port 才有。
  * 依赖的 React 树结构与服务方法名都是 ZCode 内部的，升级后可能要改这里。
  */
 
 const execFileAsync = promisify(execFile)
-const INSPECTOR_PORT = 9229
-const INSPECTOR_LIST_URL = `http://127.0.0.1:${INSPECTOR_PORT}/json/list`
+/** 避开浏览器常用的 9222 与 Node 默认的 9229 */
+export const REMOTE_DEBUGGING_PORT = 9339
+export const REMOTE_DEBUGGING_ARGUMENT = `--remote-debugging-port=${REMOTE_DEBUGGING_PORT}`
+const TARGET_LIST_URL = `http://127.0.0.1:${REMOTE_DEBUGGING_PORT}/json/list`
 const RPC_TIMEOUT_MS = 30_000
 
 const FIND_MAIN_PROCESS_SCRIPT =
   '$p = @(Get-CimInstance Win32_Process | Where-Object { $_.Name -eq "ZCode.exe" -and $_.CommandLine -notmatch "--type=|zcode.cjs|windows-helper" }); ' +
-  'if ($p.Count -ne 1) { throw "应有一个 ZCode 主进程，实际 $($p.Count) 个：ZCode 桌面端没开，或开了多个实例" }; $p[0].ProcessId'
-
-const ELECTRON_MODULE = 'process.getBuiltinModule("module").createRequire(process.execPath)("electron")'
+  'if ($p.Count -ne 1) { throw "应有一个 ZCode 主进程，实际 $($p.Count) 个：ZCode 桌面端没开，或开了多个实例" }; ' +
+  '@{ executablePath = $p[0].ExecutablePath; commandLine = $p[0].CommandLine } | ConvertTo-Json -Compress'
 
 /** ZCode.exe 的启动参数：ZCode 已经开着时，第二个实例把它转给正在运行的那个，窗口切到这个工作区 */
 export const OPEN_WORKSPACE_ARGUMENT = '--open-workspace'
@@ -64,9 +65,12 @@ interface OpenConnection extends DesktopServices {
   close(): Promise<void>
 }
 
-const sleep = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms))
+interface ZCodeMainProcess {
+  executablePath: string
+  commandLine: string
+}
 
-async function findZCodeMainProcessId(): Promise<number> {
+async function findZCodeMainProcess(): Promise<ZCodeMainProcess> {
   let stdout: string
   try {
     ;({ stdout } = await execFileAsync('pwsh', ['-NoProfile', '-Command', FIND_MAIN_PROCESS_SCRIPT], { windowsHide: true }))
@@ -74,34 +78,42 @@ async function findZCodeMainProcessId(): Promise<number> {
     const stderr = (error as { stderr?: string }).stderr?.trim()
     throw new Error(`找 ZCode 主进程失败：${stderr || (error as Error).message}`)
   }
-  const processId = Number(stdout.trim())
-  if (!Number.isInteger(processId) || processId <= 0) throw new Error(`找 ZCode 主进程时 pwsh 输出的不是 pid：${stdout}`)
-  return processId
-}
-
-async function listInspectorTargets(): Promise<{ webSocketDebuggerUrl?: string }[]> {
-  const response = await fetch(INSPECTOR_LIST_URL, { signal: AbortSignal.timeout(3_000) })
-  return (await response.json()) as { webSocketDebuggerUrl?: string }[]
-}
-
-/** 端口属于 ZCode 进程，可能被多个 home 共用；这里只确保打开，不取得关闭整个端口的所有权。 */
-async function openInspector(processId: number): Promise<string> {
-  const firstUrl = (targets: { webSocketDebuggerUrl?: string }[]): string => {
-    const url = targets[0]?.webSocketDebuggerUrl
-    if (url === undefined) throw new Error(`${INSPECTOR_LIST_URL} 里没有可连接的目标`)
-    return url
+  const found = JSON.parse(stdout) as Partial<ZCodeMainProcess>
+  if (typeof found.executablePath !== 'string' || typeof found.commandLine !== 'string') {
+    throw new Error(`找 ZCode 主进程时 pwsh 输出的不是路径与命令行：${stdout}`)
   }
+  return { executablePath: found.executablePath, commandLine: found.commandLine }
+}
+
+/** 端口归 ZCode 进程所有、随它退出关闭，可能被多个 home 共用；插件只连上它，不开也不关 */
+export function requireRemoteDebuggingArgument(mainProcess: ZCodeMainProcess): void {
+  if (mainProcess.commandLine.split(/\s+/).includes(REMOTE_DEBUGGING_ARGUMENT)) return
+  throw new Error(
+    `ZCode 不是带 ${REMOTE_DEBUGGING_ARGUMENT} 启动的，插件连不上它的窗口。关掉 ZCode，用 "${mainProcess.executablePath}" ${REMOTE_DEBUGGING_ARGUMENT} 重开；` +
+      '开始菜单与任务栏的快捷方式也加上这个参数，ZCode 自动更新后重启会丢掉它',
+  )
+}
+
+interface PageTarget {
+  type?: string
+  url?: string
+  webSocketDebuggerUrl?: string
+}
+
+/** 工作区窗口载入的是 out/renderer/index.html；登录页、内置浏览器等别的页面不算 */
+export function findWorkspaceWindowTarget(targets: PageTarget[]): string {
+  const windows = targets.filter((target) => target.type === 'page' && target.url?.includes('/out/renderer/index.html'))
+  const webSocketUrl = windows[0]?.webSocketDebuggerUrl
+  if (windows.length !== 1 || webSocketUrl === undefined) throw new Error(`应有一个 ZCode 工作区窗口，实际 ${windows.length} 个`)
+  return webSocketUrl
+}
+
+async function listPageTargets(): Promise<PageTarget[]> {
   try {
-    return firstUrl(await listInspectorTargets())
-  } catch {
-    ;(process as unknown as { _debugProcess(pid: number): void })._debugProcess(processId)
-    for (let attempt = 0; attempt < 30; attempt++) {
-      await sleep(100)
-      try {
-        return firstUrl(await listInspectorTargets())
-      } catch {}
-    }
-    throw new Error(`给 ZCode 主进程（pid ${processId}）打开调试端口后 3 秒内 ${INSPECTOR_LIST_URL} 仍连不上`)
+    const response = await fetch(TARGET_LIST_URL, { signal: AbortSignal.timeout(3_000) })
+    return (await response.json()) as PageTarget[]
+  } catch (error) {
+    throw new Error(`ZCode 命令行带着 ${REMOTE_DEBUGGING_ARGUMENT}，但 ${TARGET_LIST_URL} 连不上：${(error as Error).message}`)
   }
 }
 
@@ -175,52 +187,29 @@ function connectWebSocket(webSocketUrl: string): Promise<{ evaluate(expression: 
   })
 }
 
-async function findWorkspaceWindowId(evaluate: (expression: string) => Promise<unknown>): Promise<number> {
-  const windowIds = (await evaluate(
-    `${ELECTRON_MODULE}.BrowserWindow.getAllWindows().filter(w=>w.webContents.getURL().includes('/out/renderer/index.html')).map(w=>w.id)`,
-  )) as number[]
-  if (windowIds.length !== 1 || windowIds[0] === undefined) throw new Error(`应有一个 ZCode 工作区窗口，实际 ${windowIds.length} 个`)
-  return windowIds[0]
-}
-
 async function openConnection(): Promise<OpenConnection> {
-  const processId = await findZCodeMainProcessId()
-  const webSocketUrl = await openInspector(processId)
-  const socket = await connectWebSocket(webSocketUrl)
-  const close = async (): Promise<void> => {
-    // 只释放自己的连接。inspector.close() 会中断其他 home/调试器，并可能阻塞主进程。
-    // 端口随 ZCode 进程退出而关闭，不能用本 home 的引用计数推断全局无人使用。
-    socket.close()
-  }
-  try {
-    const inspectedProcessId = await socket.evaluate('process.pid')
-    if (inspectedProcessId !== processId) throw new Error(`${INSPECTOR_PORT} 端口属于 pid ${String(inspectedProcessId)}，不是 ZCode 主进程 ${processId}`)
-    const windowId = await findWorkspaceWindowId(socket.evaluate)
-    const evaluateInWindow = (expression: string): Promise<unknown> =>
-      socket.evaluate(`${ELECTRON_MODULE}.BrowserWindow.fromId(${windowId}).webContents.executeJavaScript(${JSON.stringify(expression)})`)
-    const call = (service: DesktopServiceName, method: string, args: unknown): Promise<unknown> =>
-      evaluateInWindow(`${findServiceInRenderer(service)}[${JSON.stringify(method)}](${JSON.stringify(args)})`)
-    const readActiveWorkspacePath = async (): Promise<string> => {
-      const paths = (await evaluateInWindow(READ_ACTIVE_WORKSPACE_PATHS)) as string[]
-      if (paths.length !== 1 || paths[0] === undefined) {
-        throw new Error(`窗口的 React 树里 activeWorkspacePath 应有一个值，实际是 ${JSON.stringify(paths)}，ZCode 内部结构可能变了`)
-      }
-      return paths[0]
+  const mainProcess = await findZCodeMainProcess()
+  requireRemoteDebuggingArgument(mainProcess)
+  const socket = await connectWebSocket(findWorkspaceWindowTarget(await listPageTargets()))
+  const evaluateInWindow = socket.evaluate
+  const call = (service: DesktopServiceName, method: string, args: unknown): Promise<unknown> =>
+    evaluateInWindow(`${findServiceInRenderer(service)}[${JSON.stringify(method)}](${JSON.stringify(args)})`)
+  const readActiveWorkspacePath = async (): Promise<string> => {
+    const paths = (await evaluateInWindow(READ_ACTIVE_WORKSPACE_PATHS)) as string[]
+    if (paths.length !== 1 || paths[0] === undefined) {
+      throw new Error(`窗口的 React 树里 activeWorkspacePath 应有一个值，实际是 ${JSON.stringify(paths)}，ZCode 内部结构可能变了`)
     }
-    const readConversationClientId = async (): Promise<string> => {
-      const clientId = await evaluateInWindow(READ_CONVERSATION_CLIENT_ID)
-      if (typeof clientId !== 'string' || clientId === '') {
-        throw new Error('窗口的 localStorage 里没有 zcode-v4-client-id:v1，ZCode 内部结构可能变了')
-      }
-      return clientId
-    }
-    const executablePath = (await socket.evaluate('process.execPath')) as string
-    return { call, readActiveWorkspacePath, readConversationClientId, executablePath, close }
-  } catch (error) {
-    // 核对没过只断开自己的连接，不在未知进程里执行关闭端口的脚本。
-    await close().catch(() => undefined)
-    throw error
+    return paths[0]
   }
+  const readConversationClientId = async (): Promise<string> => {
+    const clientId = await evaluateInWindow(READ_CONVERSATION_CLIENT_ID)
+    if (typeof clientId !== 'string' || clientId === '') {
+      throw new Error('窗口的 localStorage 里没有 zcode-v4-client-id:v1，ZCode 内部结构可能变了')
+    }
+    return clientId
+  }
+  const close = async (): Promise<void> => socket.close()
+  return { call, readActiveWorkspacePath, readConversationClientId, executablePath: mainProcess.executablePath, close }
 }
 
 /**

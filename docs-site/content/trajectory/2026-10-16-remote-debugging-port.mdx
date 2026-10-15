@@ -1,0 +1,34 @@
+---
+born-at: 2026-10-16T00:30
+type: choice
+parent: [2026-10-02-gwb-zcode]
+label: 改连窗口页面
+domain: gwb 工具插件
+---
+
+## 背景
+
+2026-10-12 晚上起 `zcode.create` 一律报 `Error: The system cannot find the file specified.`，用户在推行「文档的画面、正文与钉码交给 ZCode、Claude 只写说明并验收」的分工，
+第一次试点就卡在这里。ZCode 10-13 已自动更新到 3.15.3。查清原因、列出候选后，用户选了第一条：
+「用方案 1：ZCode 带 --remote-debugging-port 启动，插件改连窗口页面的 CDP。可以关掉重开 ZCode 做验证，开之前先跟我说一声。」
+
+pivots-from:: [调客户端任务服务](2026-09-29-desktop-task-service.md)
+
+## 结论与边界
+
+- 原因：3.15.3 关掉了 Electron fuse `EnableNodeCliInspectArguments`（3.10.2 还开着）。主进程不再启动调试信号处理，`_debugProcess` 要打开的命名共享内存不存在，报的就是那句「找不到文件」
+- 插件改成连 Chromium 远程调试端口 9339：ZCode 要带 `--remote-debugging-port=9339` 启动，插件按 `/json/list` 找到唯一的工作区窗口页面，直接在页面里执行原来那几段脚本。React 树里的服务、方法与模式值都没变，create / status / send(interrupt) / archive 照旧
+- 插件不再打开端口，只核对主进程命令行里有这个参数；没有就报错，写明怎么带着它重开。`ZCode.exe` 的路径改从进程列表读
+- 代价：ZCode 每次都要带这个参数启动，开始菜单与任务栏的快捷方式要加上它；ZCode 自动更新后重启会丢掉参数，要再重开一次。端口开着期间本机任何进程都能连上窗口页面，这与原来 9229 打开后一样
+- 命令的名字、参数与回执都没变，按 gwb-release 升 y
+
+## 否掉的候选
+
+- **把 ZCode.exe 里那个 fuse 字节改回 enabled**：插件代码不用改，但要改第三方的安装文件、签名失效，每次 ZCode 更新都被覆盖，改的时候 ZCode 必须关着
+- **注入 `zcode.cjs app-server` 子进程**：它以 RunAsNode 方式运行，还接受 `_debugProcess`，不用重启；但建任务、归档在 host 进程里，从 app-server 够不到，只能对已有会话发指令、读状态
+- **ZCode 自带的机器人渠道**（webhook、Telegram、微信、飞书）：外部消息会建出侧栏任务，但入站要经云端或第三方，本机没有监听端口
+
+## 依据
+
+探针 `probes/2610152340_zcode-inspect-fuse/`：`runs/01` 是两版 fuse 位的对照，`runs/02` 是 3.15.3 各进程对 `_debugProcess` 的反应（只有 `zcode.cjs` 子进程接受），
+`runs/03` 是带参数重开后隔离 home 里全流程的回执摘录，打断那一轮 90 秒的等待在约 7 秒内被取消。

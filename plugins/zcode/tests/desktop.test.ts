@@ -1,15 +1,15 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
+const MAIN_PROCESS = { executablePath: 'C:\\ZCode\\ZCode.exe', commandLine: '"C:\\ZCode\\ZCode.exe" --remote-debugging-port=9339' }
+
 vi.mock('node:child_process', () => ({
   execFile: (_file: string, _args: string[], _options: unknown, callback: (error: null, result: unknown) => void) =>
-    callback(null, { stdout: '123' }),
+    callback(null, { stdout: JSON.stringify(MAIN_PROCESS) }),
 }))
 
-// Two independently loaded plugin modules represent two homes sharing one inspector.
-// Closing the inspector from either home interrupts every connection, just as Node does.
+// Two independently loaded plugin modules represent two homes sharing one remote debugging port.
 class InspectorSocket {
   static sockets: InspectorSocket[] = []
-  static listening = false
   static dropReplies = false
   static serviceDelayMs = 0
   onopen?: () => void
@@ -26,17 +26,7 @@ class InspectorSocket {
     if (InspectorSocket.dropReplies) return
     const { id, params } = JSON.parse(raw) as { id: number; params: { expression: string } }
     const expression = params.expression
-    let value: unknown = 'service-result'
-    if (expression === 'process.pid') value = 123
-    else if (expression === 'process.execPath') value = 'ZCode.exe'
-    else if (expression.includes('getAllWindows()')) value = [1]
-    else if (expression.includes('"inspector").close()')) {
-      value = true
-      setTimeout(() => {
-        InspectorSocket.listening = false
-        for (const socket of InspectorSocket.sockets) socket.close()
-      }, 200)
-    }
+    const value: unknown = expression.includes('services?.') ? 'service-result' : null
     const reply = () => {
       if (this.readyState === 1) this.onmessage?.({ data: JSON.stringify({ id, result: { result: { value } } }) })
     }
@@ -60,19 +50,49 @@ beforeEach(() => {
   vi.resetModules()
   vi.useFakeTimers()
   InspectorSocket.sockets = []
-  InspectorSocket.listening = false
   InspectorSocket.dropReplies = false
   InspectorSocket.serviceDelayMs = 0
   vi.stubGlobal('WebSocket', InspectorSocket)
-  vi.stubGlobal('fetch', async () => {
-    if (!InspectorSocket.listening) throw new Error('ECONNREFUSED')
-    return { json: async () => [{ webSocketDebuggerUrl: 'ws://127.0.0.1:9229/test' }] }
-  })
-  vi.spyOn(process as unknown as { _debugProcess(pid: number): void }, '_debugProcess')
-    .mockImplementation(() => { InspectorSocket.listening = true })
+  vi.stubGlobal('fetch', async () => ({
+    json: async () => [{ type: 'page', url: 'file:///C:/ZCode/resources/app.asar/out/renderer/index.html', webSocketDebuggerUrl: 'ws://127.0.0.1:9339/test' }],
+  }))
 })
 
 afterEach(() => { vi.restoreAllMocks(); vi.unstubAllGlobals(); vi.useRealTimers() })
+
+describe('remote debugging argument', () => {
+  it('accepts the exact argument as its own token', async () => {
+    const { requireRemoteDebuggingArgument } = await import('../src/desktop.js')
+    expect(() => requireRemoteDebuggingArgument(MAIN_PROCESS)).not.toThrow()
+  })
+
+  it('rejects a ZCode started without it, or with another port, and says how to relaunch', async () => {
+    const { requireRemoteDebuggingArgument } = await import('../src/desktop.js')
+    for (const commandLine of ['"C:\\ZCode\\ZCode.exe"', '"C:\\ZCode\\ZCode.exe" --remote-debugging-port=93390']) {
+      expect(() => requireRemoteDebuggingArgument({ ...MAIN_PROCESS, commandLine }))
+        .toThrow('用 "C:\\ZCode\\ZCode.exe" --remote-debugging-port=9339 重开')
+    }
+  })
+})
+
+describe('workspace window target', () => {
+  const workspaceWindow = { type: 'page', url: 'file:///C:/ZCode/resources/app.asar/out/renderer/index.html?x=1', webSocketDebuggerUrl: 'ws://window' }
+
+  it('picks the one workspace window among other pages and workers', async () => {
+    const { findWorkspaceWindowTarget } = await import('../src/desktop.js')
+    expect(findWorkspaceWindowTarget([
+      { type: 'page', url: 'file:///C:/ZCode/resources/app.asar/out/renderer/login.html', webSocketDebuggerUrl: 'ws://login' },
+      { type: 'service_worker', url: 'file:///C:/ZCode/resources/app.asar/out/renderer/index.html', webSocketDebuggerUrl: 'ws://worker' },
+      workspaceWindow,
+    ])).toBe('ws://window')
+  })
+
+  it('refuses zero or several workspace windows', async () => {
+    const { findWorkspaceWindowTarget } = await import('../src/desktop.js')
+    expect(() => findWorkspaceWindowTarget([])).toThrow('实际 0 个')
+    expect(() => findWorkspaceWindowTarget([workspaceWindow, workspaceWindow])).toThrow('实际 2 个')
+  })
+})
 
 describe('desktop connection ownership', () => {
   it('one home finishing must not interrupt another home querying ZCode', async () => {

@@ -4,7 +4,7 @@
 
 本仓的 `plugins/zcode` 与 `plugins/claudecode` 是两个独立插件，各自维护服务、命令、版本和依赖；QQ 与协作站各自写执行端适配层接它们。
 
-ZCode 插件 `@godcreator/gwb-zcode`（`plugins/zcode/`）：经 ZCode 主进程的 Node 调试端口调 ZCode 客户端的服务。本体是服务 `gwbZcode`（`open` 切窗口的工作区，`create` / `send` 派任务，`status` 读结果，`archive` 归档会话），同名的 `zcode.*` 五条命令是给 agent 的薄封装。
+ZCode 插件 `@godcreator/gwb-zcode`（`plugins/zcode/`）：经 ZCode 工作区窗口页面的远程调试端口（ZCode 要带 `--remote-debugging-port=9339` 启动）调 ZCode 客户端的服务。本体是服务 `gwbZcode`（`open` 切窗口的工作区，`create` / `send` 派任务，`status` 读结果，`archive` 归档会话），同名的 `zcode.*` 五条命令是给 agent 的薄封装。
 
 ## ZCode 约束
 

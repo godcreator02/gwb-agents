@@ -1,0 +1,19 @@
+2026-10-16 00:05 起，ZCode 3.15.3 以 `ZCode.exe --remote-debugging-port=9339` 启动；
+隔离 home zcode-cdp-2610160007 装 @godcreator/gwb-zcode 0.4.2-dev.20261016000757，经 devkit.cdp cmd 调命令。
+以下是各条回执的 data 摘录（工作区是一个空的临时目录 zcode-test）。
+
+zcode.open      → { switched: true }
+zcode.create    → { taskId: "sess_d38967ce-f432-4acc-bcc3-25495bd228c8", status: "running", mode: "yolo", roundStarted: true }
+                  指令：运行一次 Get-Date，回复 ZCODE-CDP-1016 收到与时间
+zcode.status    → { status: "completed", roundIsOver: true, mode: "yolo",
+                    replies: ["我来运行一次 `Get-Date` 做连通测试。ZCODE-CDP-1016 收到，`Get-Date` 输出的时间为 Friday, October 16, 2026 0:08:39……"] }
+zcode.send      → { status: "running", roundStarted: true }
+                  指令：运行 Start-Sleep -Seconds 90; 'SLEEP-DONE'，跑完再回复
+zcode.send      → { status: "running", roundStarted: true }   interrupt: true
+                  指令：不用等 Start-Sleep，直接回复 ZCODE-INTERRUPT-OK
+zcode.status    → { status: "completed", roundIsOver: true, replies: ["ZCODE-INTERRUPT-OK"] }
+                  两次 send 之间约 10 秒，status 在打断后约 7 秒交回，90 秒的等待被取消
+zcode.archive   → { archived: true }
+
+侧栏核对：再 create 一条 "SIDEBAR-CHECK-1016 …"，经 9339 读工作区窗口的 document.body.innerText，
+含这个标题的有两行；status 交回 ["OK"] 后 archive → { archived: true }。

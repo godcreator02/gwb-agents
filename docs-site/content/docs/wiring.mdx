@@ -36,9 +36,10 @@ description: gwb-zcode 提供的服务、命令与说明书，注入的服务与
 
 | 通道 | 对方 | 名字 | 用来做什么 |
 | --- | --- | --- | --- |
-| 进程命令行 | ZCode 主进程 | 不含 `--type=`、`zcode.cjs`、`windows-helper` 的 `ZCode.exe` | 认出主进程 |
-| 本机端口 | ZCode 主进程 | `127.0.0.1:9229`，Node 调试协议 | 在主进程里执行脚本 |
-| 页面地址 | ZCode 工作区窗口 | 地址含 `/out/renderer/index.html` | 认出工作区窗口 |
+| 进程命令行 | ZCode 主进程 | 不含 `--type=`、`zcode.cjs`、`windows-helper` 的 `ZCode.exe` | 认出主进程，读它的 `ZCode.exe` 路径 |
+| 启动参数 | ZCode 主进程 | 命令行里有 `--remote-debugging-port=9339` | 没有就报错，写明怎么带着它重开 |
+| 本机端口 | ZCode 工作区窗口 | `127.0.0.1:9339`，Chromium 远程调试协议，`/json/list` 列出页面 | 直接在窗口的页面里执行脚本 |
+| 页面地址 | ZCode 工作区窗口 | 类型 `page`、地址含 `/out/renderer/index.html` | 认出工作区窗口 |
 | React 树 | ZCode 工作区窗口 | `memoizedProps.services.zcodeTaskService` / `zcodeAgentService` | 拿到客户端的任务服务与代理服务 |
 | 服务方法 | `zcodeTaskService` | `createTask`、`setMode`、`sendPrompt`、`getTaskSnapshot` | 建会话、切模式、发指令、读快照 |
 | 服务方法 | `zcodeTaskService` | `archiveTask`、`listArchivedTasks` | 归档会话、读回已归档列表核对 |
@@ -50,10 +51,9 @@ description: gwb-zcode 提供的服务、命令与说明书，注入的服务与
 | 模式值 | 两个服务 | `yolo`、`build` | 界面上的「完全访问」「变更前确认」 |
 | 启动参数 | `ZCode.exe` 的第二个实例 | `--open-workspace <目录>` | 让正在运行的 ZCode 把窗口切到这个工作区 |
 | React 树 | ZCode 工作区窗口 | 组件 `memoizedProps.activeWorkspacePath` | 读窗口当前的工作区，核对切没切成 |
-| 主进程字段 | ZCode 主进程 | `process.execPath` | 拿到 `ZCode.exe` 的路径 |
 
-{/* ref file="../plugins/zcode/src/desktop.ts" lines="11-12" hash="e49b60617c05" blob="1cb48af3256e" */}
+{/* ref file="../plugins/zcode/src/desktop.ts" lines="11-14" hash="b27bdd58d55b" blob="4d4211325757" */}
 
-{/* ref file="../plugins/zcode/src/desktop.ts" lines="24-25" hash="91e6ab54af71" blob="db862b814598" */}
+{/* ref file="../plugins/zcode/src/desktop.ts" lines="25-26" hash="91e6ab54af71" blob="4d4211325757" */}
 
 {/* ref file="../plugins/zcode/src/task-progress.ts" lines="3-4" hash="a4db8864185b" blob="987594f93400" */}

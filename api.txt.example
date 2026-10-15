@@ -1,0 +1,7 @@
+# 复制成同目录的 api.txt 再填（api.txt 已 gitignore）。
+# DeepSeek 不认识的模型名会被换成 deepseek-flash，不报错；可选 deepseek-v4-pro、deepseek-flash
+DEEPSEEK_API_KEY=
+DEEPSEEK_MODEL=deepseek-v4-pro
+# 智谱文档给 Claude Code 推荐的是 GLM Coding Plan 的 key
+GLM_API_KEY=
+GLM_MODEL=glm-5.2

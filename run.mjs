@@ -1,4 +1,4 @@
-// 用法：node run.mjs <profile>
+// 用法：node --env-file-if-exists=api.txt run.mjs <profile>
 // 在 work/<profile>/ 里放一个文件，让 agent 读、改、跑命令，跑完检查结果。
 import { query } from '@anthropic-ai/claude-agent-sdk'
 import { mkdir, rm, writeFile, readFile } from 'node:fs/promises'
@@ -6,10 +6,11 @@ import { join } from 'node:path'
 import { profiles } from './profiles.mjs'
 
 const profileName = process.argv[2]
-const profile = profiles[profileName]
-if (!profile) {
+const buildProfile = profiles[profileName]
+if (!buildProfile) {
   throw new Error(`没有这个 profile：${profileName}。可选：${Object.keys(profiles).join(', ')}`)
 }
+const profile = buildProfile()
 
 const workDir = join(import.meta.dirname, 'work', profileName)
 await rm(workDir, { recursive: true, force: true })

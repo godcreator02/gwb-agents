@@ -1,6 +1,7 @@
 // 每个模型一份：model 传给 SDK，env 覆盖到子进程的环境变量上。
 // 密钥与模型名从 api.txt 读（已 gitignore，格式见 api.txt.example，用 --env-file 载入）。
 import { join } from 'node:path'
+import { workRoot } from './paths.mjs'
 
 function requireEnv(name) {
   const value = process.env[name]
@@ -16,7 +17,7 @@ function thirdPartyProfile({ name, baseUrl, tokenVar, modelVar }) {
   return {
     model,
     env: {
-      CLAUDE_CONFIG_DIR: join(import.meta.dirname, 'work', `.claude-config-${name}`),
+      CLAUDE_CONFIG_DIR: join(workRoot, `.claude-config-${name}`),
       ANTHROPIC_BASE_URL: baseUrl,
       ANTHROPIC_AUTH_TOKEN: requireEnv(tokenVar),
       ANTHROPIC_DEFAULT_OPUS_MODEL: model,

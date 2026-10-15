@@ -1,0 +1,2 @@
+deepseek | ANTHROPIC_AUTH_TOKEN | init model=deepseek-flash | 抛错：Error: Claude Code returned an error result: Failed to authenticate. API Error: 401 Authentication Fails, Your api key: ****0AAA is invalid (request_id: 0b58856f-c1e5-43a7-aa4e-2af5b40912fd)
+deepseek | ANTHROPIC_API_KEY | init model=deepseek-flash | 抛错：Error: Claude Code returned an error result: Failed to authenticate. API Error: 401 Authentication Fails, Your api key: ****8QAA is invalid (request_id: febd1589-c840-4a91-ac49-ba59b410d3c9)

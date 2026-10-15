@@ -3,6 +3,7 @@
     "index",
     "zcode",
     "claudecode",
+    "claude-agent",
     "commands",
     "wiring",
     "glossary",

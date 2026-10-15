@@ -1,0 +1,61 @@
+---
+title: Claude Agent 插件
+description: 服务 gwbClaudeAgent：经 Claude Agent SDK 跑无界面的 agent 会话，模型可换；SDK 由用户用 npm 装，插件按设置 sdk-dir 加载
+---
+
+**本页回答**：`plugins/claude-agent` 负责什么、对外给什么、依赖谁，以及刻意不做的事。
+
+## 功能
+
+每一轮调一次 Claude Agent SDK 的 `query()`：新会话用插件自己定的 UUID 当会话号，续聊用 `resume`。SDK 在后台启动它附带的那份 Claude Code（SDK 0.3.N 配 Claude Code 2.1.N），权限 `bypassPermissions`，照常加载本机 `~/.claude` 的设置、CLAUDE.md、MCP 与 hooks。开始了就交回，结果由 SDK 交回的 result 消息记下；跑着的时候记下主代理的工具调用与最近一段回答，给 `status` 当进度。
+
+**模型不写死**：设置里一组 `models`，每份是模型名、请求地址、token。不填请求地址的一份用本机已登录的 Claude，只换模型名；填了的一份是第三方的 Anthropic 兼容接口。一份都不选时用本机 Claude、Claude Code 自己的默认模型。会话建立时用哪份，续聊沿用它。
+
+**SDK 不打包**：SDK 附带的 Claude Code 约 257 MB，打不进插件。用户照说明书 `claude-agent-setup` 用 npm 全局装好，把 `npm ls -g` 交回的包目录填进设置 `sdk-dir`；插件只认这里，版本不在支持范围里就报错：
+
+{/* ref file="../plugins/claude-agent/src/sdk-loader.ts" lines="7-27" hash="ec82c41a6c09" blob="38ddd7804690" */}
+
+## 接口
+
+本体是服务 `gwbClaudeAgent`，别的插件 inject 它调方法；`claude-agent.*` 命令给 agent 用，只查参数形状、再调同名方法。类型在本包 `src/api.ts`：
+
+{/* ref file="../plugins/claude-agent/src/api.ts" lines="70-84" hash="03c4b83f49e1" blob="d4cbc50893ea" */}
+
+| 方法 / 命令 | 参数 | 作用 |
+| --- | --- | --- |
+| `create` / `claude-agent.create` | `{workspace,prompt,model?}` | 新建会话并开始第一轮，返回 `{sessionId,round,model,accepted:true}`，只表示开始了 |
+| `send` / `claude-agent.send` | `{workspace,sessionId,prompt,interrupt?}` | 续一轮；上一轮还在跑时不带 `interrupt` 报错，带 `interrupt:true` 先结束它（那一轮记 `failed`）再开 |
+| `status` / `claude-agent.status` | `{workspace,sessionId}` | `running` 以外都是这一轮结束了；`completed` 带最终回答，`failed` 带原因；`running` 时带进度 `{toolCalls,lastTool,lastText}` |
+| `setupStatus` / `claude-agent.setup-status` | 无 | SDK 装好没有、各份模型配好没有，不含 token 的值 |
+
+续一轮与打断。打断时先按进程树结束 Claude Code（`taskkill /T /F`），再让 SDK 收尾：Windows 上只结束 claude.exe 不会连带结束它用 Shell 工具开的命令，SDK 的 `close()` 等不到它自己退出时正是只结束 claude.exe。为了拿到 pid，Claude Code 由插件经 SDK 的 `spawnClaudeCodeProcess` 自己启动；插件卸载时在跑的一轮也这样结束：
+
+{/* ref file="../plugins/claude-agent/src/runtime.ts" lines="170-199" hash="d125da2ce3cc" blob="5fadcdfb904e" */}
+
+{/* ref file="../plugins/claude-agent/src/runtime.ts" lines="274-279" hash="5db59ce6b605" blob="5fadcdfb904e" */}
+
+**给 SDK 子进程的环境去掉 Claude Code 的会话变量**：工作台可能由 Claude Code 会话启动，带着桌面版塞进来的变量时子进程改用桌面版的登录、盖掉第三方模型的 token（实验在 `probes/2610152150_third-party-auth/`）。`CLAUDE_*`、`ANTHROPIC_*` 这类名字只传 Windows 用户级、系统级长期环境变量里有的，那是用户自己设的，比如打开 PowerShell 工具的 `CLAUDE_CODE_USE_POWERSHELL_TOOL`，去掉它子会话就没有 Shell 工具；`~/.claude/settings.json` 的 `env` 由 Claude Code 自己读：
+
+{/* ref file="../plugins/claude-agent/src/models.ts" lines="68-81" hash="1bf4ebaa6e1d" blob="4da5902c08d0" */}
+
+测试：`tests/runtime.test.ts`、`tests/models.test.ts`、`tests/claude-process.test.ts`（真进程：子进程开的命令随进程树一起结束）、`tests/sdk-loader.test.ts`、`tests/args.test.ts`。
+
+## 依赖
+
+| 依赖 | 用来做什么 | 缺了会怎样 |
+| --- | --- | --- |
+| 命令总线 `gwbCommands`（必需） | 登记四条命令 | 插件不加载 |
+| 设置 `gwbSettings`（必需，0.4.2 起） | `sdk-dir`、`default-model` 两项，一组设置 `models`（`defineGroup` / `getGroup`），token 是 secret | 插件不加载 |
+| 数据 `gwbData`（必需） | 本 home 的 `sessions` 文档保存会话状态 | 插件不加载 |
+| 说明书 `gwbSkills`（可选） | 登记 `claude-agent`、`claude-agent-setup` 两份说明书 | 说明书不出现 |
+| `cordis` | 服务基类 `Service` | — |
+| 用户装的 SDK | `@anthropic-ai/claude-agent-sdk` 0.3.299 起的 0.3.x，连同平台包里附带的 Claude Code | 开一轮时报错并指向 `claude-agent-setup` |
+
+{/* ref file="../plugins/claude-agent/src/index.ts" lines="29-29" hash="f3e25754b611" blob="63f96c4966e1" */}
+
+## 不做的事
+
+- **不打包 SDK、不自动找 SDK**：只认设置 `sdk-dir`（轨迹卡[「换 Agent SDK」](/trajectory/2026-10-15-claude-agent-sdk)）
+- **不做界面**：会话只在 `status` 里看；要人看着做的活交给 ZCode
+- **不管占用、不参与回报**：同一个工作区开几条会话由调用方决定；要不要回报、报给谁由派任务的一方写进提示词
+- **不自动重发**：出错、被打断、插件重载中断的轮次记 `failed`，由调用方决定要不要再派

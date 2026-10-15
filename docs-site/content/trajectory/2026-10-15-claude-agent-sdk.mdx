@@ -1,0 +1,39 @@
+---
+born-at: 2026-10-15T21:10
+type: choice
+parent: [2026-10-02-gwb-zcode]
+label: 换 Agent SDK
+domain: 任务通道
+---
+
+## 背景
+
+用户先提出「我要尝试一下一个方案，用claude的agent sdk，但是用我自己的模型」。在单元 k8pa2-agent-sdk-models 的 sdk-lab 里，Claude、DeepSeek、GLM 三个模型经 Agent SDK 各跑了读改跑、多文件改名、修 bug 跑测试、子代理并行统计四个任务，全部通过自动检查。之后用户说：
+
+「下一步就是把现在我做的agent那个gwb插件，可以替换成claudecode sdk了我觉得。轨迹卡你可以记录一下，claude最近宣布sdk可以免费使用，所以我们直接来sdk这边跑了。zcode功能还是保留，因为zcode有1.5倍额度可以用」
+
+（核实时查到的计费事实：Claude 帮助中心的说明是 Agent SDK、`claude -p` 与第三方应用一直可以用订阅额度，6 月宣布的单独计费已暂停；2026-10-07 起 Max 与 Team 套餐每月另含一笔 API 额度，Agent SDK 与 `claude -p` 都能用它。所以 SDK 与 gwb-claudecode 现在运行的 `claude -p` 计费相同，换 SDK 不是为了省钱。）
+
+看过 gwb-claudecode 的实现（每轮起一个 `claude.exe -p --output-format stream-json` 进程，只认最后的 result 一行）后，用户说「gwb-claudecode 现在和我们的目标差距很大吧，我觉得可以废掉claudecode重写claudesdk插件了」，接着定下「叫 gwb-claude-agent 。给一个初始化的skill，让用户先去装sdk，我们不要打包sdk。不用界面」。
+
+SDK 装在哪的讨论里，用户先否掉运行时自动找常见安装位置：「就是还是去找设置的位置，不要自动找了」；又问「找这个办法不能直接问node有没有装吗？一定要查位置吗」。（实测：`require.resolve` 只沿目录往上找 `node_modules` 并看 `NODE_PATH`，找不到 npm 全局目录里的包；`npm ls -g <包> --json --long` 能交回版本与确切路径。）模型配置上用户说「模型显然不用写死吧，不就是model，api和token三个设置不就是个新配置了，可以通用吧」，随后要设置插件加「一组设置」，那一步记在 gwb-base-plugins 的轨迹区。
+
+## 结论与边界
+
+废弃 `@godcreator/gwb-claudecode`，在本仓 `plugins/claude-agent/` 新写 `@godcreator/gwb-claude-agent`：本体是服务 `gwbClaudeAgent`，`claude-agent.*` 命令是薄封装；每一轮调一次 SDK 的 `query()`，续聊用 `resume`，跑着的一轮可以打断；权限 `bypassPermissions`，照常加载本机的设置、MCP、hooks 与 mods；不做界面。
+
+SDK 不打包进插件，由用户装：说明书 `claude-agent-setup` 带着 agent 用 `npm ls -g` 查，没装或版本不对就 `npm install -g` 装上，再把 npm 交回的 SDK 包目录写进设置 `sdk-dir`。插件运行时只认 `sdk-dir`，不自动去别处找；版本不在插件支持的范围内直接报错。SDK 自带配套的 Claude Code（SDK 0.3.N 对应 Claude Code 2.1.N，装在平台包里），插件用这一份，不用本机 `.local\bin` 下的 `claude.exe`。
+
+模型不写死：用设置插件的一组设置 `models`，每份是模型名、请求地址、token；不填请求地址的一份用本机已登录的 Claude 订阅。第三方模型和 Claude 共用本机的 Claude Code 配置目录，CLAUDE.md、MCP、hooks 照常加载；给 SDK 子进程的环境去掉 Claude Code 桌面版塞进来的会话变量，不然 token 会被桌面版的登录盖掉；`CLAUDE_*`、`ANTHROPIC_*` 这类名字只传 Windows 用户级、系统级长期环境变量里有的。一条会话建立时用哪份模型，续聊沿用它。
+
+打断一轮时按进程树结束 Claude Code（`taskkill /T /F`），Claude Code 由插件经 SDK 的 `spawnClaudeCodeProcess` 自己启动以拿到 pid。
+
+ZCode 执行端照旧保留。qq-bot 新写一份接 `gwbClaudeAgent` 的适配层，任务组加可选的模型字段，换下 gwb-claudecode 那份。
+
+## 否掉的候选
+
+在 gwb-claudecode 里原地换实现：用户选了新起一个插件。把 SDK 打包进插件：SDK 附带的 `claude.exe` 约 257 MB，esbuild 打不进去，用户也定了不打包。运行时自动找几个常见安装位置：用户要求只认设置里的位置。插件里写死 claude、deepseek、glm 三份模型：用户要求做成通用的配置。`CLAUDE_*` 变量除 `CLAUDE_CODE_PLUGIN_DIRS` 外一律不传：隔离 home 实测时子会话没有任何 Shell 工具，本机 `settings.json` 禁了 Bash，PowerShell 工具靠用户级环境变量 `CLAUDE_CODE_USE_POWERSHELL_TOOL` 打开，被一并去掉了。打断只调 SDK 的 `close()`：它先关 stdin、约 2 秒后只强制结束 claude.exe，实测被打断那一轮用 Monitor 开的 `ping` 留下来接着跑。也没用 SDK 默认启动方式里的 `onProcessSpawned` 回调拿 pid：它不在 `sdk.d.ts` 的公开类型里。
+
+## 依据
+
+实验在单元 `D:\unitfolders\k8pa2-agent-sdk-models\sdk-lab`（提交 ed4defd、a9218c9、d0de3ec）：`results/` 下是三个模型四个任务的检查结果，README 还记了 Claude 两次把写入路径拼错到工作目录外。那里当时以为「本机已登录时第三方模型回 401，要单独的 `CLAUDE_CONFIG_DIR`」，本仓 `probes/2610152150_third-party-auth/` 查明 401 来自 Claude Code 桌面版塞给子进程的会话变量，去掉后两个变量名都能用。从全局目录按路径加载 SDK、跑的是它附带的 Claude Code 2.1.299，见 `probes/2610152120_sdk-from-global-dir/`。改过以后在隔离 home 里实测：DeepSeek 子会话用 PowerShell 工具前台跑 `ping -n 120`，带 `interrupt` 续一轮 1.2 秒交回，ping、pwsh 与 claude.exe 都已结束，下一轮答得出上一轮用了哪个工具。计费说明见 Claude 帮助中心 https://support.claude.com/en/articles/15036540-use-the-claude-agent-sdk-with-your-claude-plan 。

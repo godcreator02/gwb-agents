@@ -1,0 +1,5 @@
+会话变量：去掉
+deepseek | ANTHROPIC_AUTH_TOKEN | init model=deepseek-flash | success is_error=false "好的"
+deepseek | ANTHROPIC_API_KEY | init model=deepseek-flash | success is_error=false "好的"
+glm | ANTHROPIC_AUTH_TOKEN | init model=glm-5.3 | success is_error=false "ok"
+glm | ANTHROPIC_API_KEY | init model=glm-5.3 | success is_error=false "ok"

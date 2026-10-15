@@ -1,0 +1,23 @@
+---
+born-at: 2026-10-15T22:10
+type: choice
+parent: [2026-10-02-gwb-zcode]
+label: token 由用户手动填
+domain: 任务通道
+---
+
+## 背景
+
+gwb-claude-agent 0.1.0 装进 default 时，agent 照说明书 `claude-agent-setup` 第 2 节第 4 步的第二条路，把 sdk-lab 实验用的 `api.txt` 转成临时 JSON，再用 `credentials.import` 导入了 DeepSeek、GLM 的 token。用户看到后说：
+
+「以后模型的token应该让用户去设置里手动输入啊，怎么变成api.txt 了」
+
+随后要求「把 claude-agent-setup 里 credentials.import 那条路去掉，只写用户在设置界面手动输入 token、agent 用 setup-status 核对」。
+
+## 结论与边界
+
+说明书只写一条路：agent 配好模型名与请求地址后停下，告诉用户在「插件管理」窗格里 claude-agent 这一条的设置中，找到 `<实例> · token` 一项手动输入（窗格保存 secret 行用的是只给页面的 `credentials.set`）；用户说填好了，agent 用 `claude-agent.setup-status` 看 `tokenSet`。agent 不代填、不从文件导入。插件代码不变，0.1.1 只改说明书。
+
+## 否掉的候选
+
+保留「从只含这把 key 的文件导入」作为第二条路：有这条路 agent 就会去找本机现成的 key 文件代填，用户要的是 key 只经自己的手进设置。

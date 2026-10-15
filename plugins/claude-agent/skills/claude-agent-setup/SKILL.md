@@ -20,7 +20,7 @@ description: 第一次用 claude-agent、或 claude-agent 报错说没配 sdk-di
 1. 实例名单：`settings.set {"section":"claude-agent","key":"models","value":["sonnet","deepseek"]}`（kebab-case，增删一份就是改这张名单；去掉的实例值留着，不自动删）
 2. 每份的模型名：`settings.set {…,"key":"models.deepseek.model","value":"deepseek-v4-pro"}`
 3. 第三方的请求地址：`settings.set {…,"key":"models.deepseek.base-url","value":"https://api.deepseek.com/anthropic"}`。本机 Claude 的那份不填请求地址、也不填 token
-4. 第三方的 token：让用户在工作台的设置界面里填 `deepseek · token`，或从只含这把 key 的文件导入 `credentials.import {"from":{"file":"<绝对路径>","format":"text"},"to":{"section":"claude-agent","key":"models.deepseek.token"}}`。不要把 key 读进会话
+4. 第三方的 token 由用户自己填：配到这一步就停下，告诉用户在工作台「插件管理」窗格里 claude-agent 这一条的设置中，找到 `deepseek · token` 一项手动输入、保存。agent 不代填、不从文件导入，也不把 key 读进会话；用户说填好了，再照第 3 节核对 `tokenSet`
 5. 可选：`settings.set {…,"key":"default-model","value":"deepseek"}`，`create` 不给 `model` 时用它
 
 | 服务 | 请求地址 | 说明 |
@@ -30,8 +30,8 @@ description: 第一次用 claude-agent、或 claude-agent 报错说没配 sdk-di
 
 ## 3. 核对
 
-`claude-agent.setup-status`：`sdk.ready` 为 `true`；`models` 里每份 `problem` 为 `null`、第三方的 `tokenSet` 为 `true`；`defaultModelProblem` 为 `null`。不对就照 `problem` 里的原话改。
+`claude-agent.setup-status`：`sdk.ready` 为 `true`；`models` 里每份 `problem` 为 `null`、第三方的 `tokenSet` 为 `true`；`defaultModelProblem` 为 `null`。不对就照 `problem` 里的原话改；`tokenSet` 为 `false` 的，请用户去「插件管理」窗格里填那一项，不替用户填。
 
 **完成判据**：上面三项都对，再派一个无害的小任务（如「只回答 ok」）用 `claude-agent.status` 看到 `completed`。
 
-- 给 SDK 子进程的环境里，`CLAUDE_*`、`ANTHROPIC_*` 开头的变量只带 Windows 用户级、系统级长期环境变量里有的；启动工作台的进程临时塞进来的不带。要给 Claude Code 设环境变量，设成用户级环境变量，或写进 `~/.claude/settings.json` 的 `env`
+- 给 SDK 子进程的环境里，`CLAUDE_*`、`ANTHROPIC_*` 开头的变量只带 Windows 用户级、系统级长期环境变量里有的；启动工作台的进程临时设的不带。要给 Claude Code 设环境变量，设成用户级环境变量，或写进 `~/.claude/settings.json` 的 `env`

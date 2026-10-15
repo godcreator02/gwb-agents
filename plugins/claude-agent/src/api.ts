@@ -47,6 +47,11 @@ export interface ClaudeAgentSendInput extends ClaudeAgentSessionInput {
   interrupt?: boolean
 }
 
+export interface ClaudeAgentRoundInput extends ClaudeAgentSessionInput {
+  /** create / send 回执里的 round；只能等这条会话最新的一轮 */
+  round: number
+}
+
 export interface ClaudeAgentStarted {
   sessionId: string
   round: number
@@ -79,6 +84,11 @@ export interface GwbClaudeAgentApi {
   send(input: ClaudeAgentSendInput): Promise<ClaudeAgentStarted>
   /** 读这条会话最新一轮的状态、回答与进度 */
   status(input: ClaudeAgentSessionInput): Promise<ClaudeAgentStatus>
+  /**
+   * 等这一轮结束，交回结束时的记录（status 为 completed 或 failed，text 是最终回答或原因）；已经结束的立即交回。
+   * 插件重载、工作台退出、被下一轮打断都算结束（failed），不会一直等下去。round 不是这条会话最新的一轮就报错：更早的轮次不保存结果
+   */
+  waitRound(input: ClaudeAgentRoundInput): Promise<ClaudeAgentSession>
   /** SDK 装好没有、各份模型配好没有 */
   setupStatus(): Promise<ClaudeAgentSetupStatus>
 }

@@ -5,6 +5,7 @@ import path from 'node:path'
 import type {
   ClaudeAgentCreateInput,
   ClaudeAgentProgress,
+  ClaudeAgentRoundInput,
   ClaudeAgentSendInput,
   ClaudeAgentSession,
   ClaudeAgentSessionInput,
@@ -113,6 +114,8 @@ interface RunningRound {
   progress: ClaudeAgentProgress
   interruptedByNextRound: boolean
   finished: Promise<void>
+  /** 收尾时这一轮的记录；waitRound 交回它，不受之后开的下一轮影响。存盘队列已经坏了时没有 */
+  ended: ClaudeAgentSession | undefined
 }
 
 export class ClaudeAgentRuntime {
@@ -208,6 +211,18 @@ export class ClaudeAgentRuntime {
     })
   }
 
+  async waitRound({ workspace, sessionId, round }: ClaudeAgentRoundInput): Promise<ClaudeAgentSession> {
+    requireSessionId(sessionId)
+    const resolvedWorkspace = requireAbsoluteWorkspace(workspace)
+    if (!Number.isSafeInteger(round) || round < 1) throw new Error(`round 要是正整数，收到 ${String(round)}`)
+    const { latest, running } = await this.serial(async () => ({ latest: structuredClone(this.find(resolvedWorkspace, sessionId)), running: this.runningRounds.get(sessionId) }))
+    if (round !== latest.round) throw new Error(`这条会话最新的是第 ${latest.round} 轮，等不了第 ${round} 轮：只保存最新一轮的结果`)
+    if (running === undefined) return latest
+    await running.finished
+    if (running.ended === undefined) throw new Error(`第 ${round} 轮结束了，但会话记录存盘已经坏了，结果没有记下`)
+    return running.ended
+  }
+
   private assertNotClosing(): void {
     if (this.closing) throw new Error('claude-agent 插件正在卸载')
   }
@@ -236,7 +251,7 @@ export class ClaudeAgentRuntime {
         spawnClaudeCodeProcess,
       },
     })
-    const running: RunningRound = { query, claudeCode, progress: { toolCalls: 0, lastTool: null, lastText: null }, interruptedByNextRound: false, finished: Promise.resolve() }
+    const running: RunningRound = { query, claudeCode, progress: { toolCalls: 0, lastTool: null, lastText: null }, interruptedByNextRound: false, finished: Promise.resolve(), ended: undefined }
     running.finished = this.consumeRound(session, running)
     this.runningRounds.set(session.sessionId, running)
   }
@@ -252,8 +267,8 @@ export class ClaudeAgentRuntime {
     } catch (error) {
       outcome = { failed: true, text: String(error instanceof Error ? error.message : error).slice(-MAX_RESULT_CHARS) }
     }
-    this.runningRounds.delete(session.sessionId)
     await this.serial(async () => {
+      this.runningRounds.delete(session.sessionId)
       if (this.closing) {
         session.status = 'failed'
         session.text = INTERRUPTED_BY_RELOAD
@@ -267,8 +282,12 @@ export class ClaudeAgentRuntime {
         session.status = outcome.failed ? 'failed' : 'completed'
         session.text = outcome.text
       }
+      running.ended = structuredClone(session)
       await this.save()
-    }).catch(() => this.deps.error('claude-agent 这一轮的结果存盘失败'))
+    }).catch(() => {
+      this.runningRounds.delete(session.sessionId)
+      this.deps.error('claude-agent 这一轮的结果存盘失败')
+    })
   }
 
   /** 先结束进程树，再让 SDK 收尾；SDK 一侧的 close() 只结束 claude.exe 本身 */

@@ -19,20 +19,25 @@ description: 服务 gwbClaudeAgent：经 Claude Agent SDK 跑无界面的 agent 
 
 本体是服务 `gwbClaudeAgent`，别的插件 inject 它调方法；`claude-agent.*` 命令给 agent 用，只查参数形状、再调同名方法。类型在本包 `src/api.ts`：
 
-{/* ref file="../plugins/claude-agent/src/api.ts" lines="70-84" hash="03c4b83f49e1" blob="d4cbc50893ea" */}
+{/* ref file="../plugins/claude-agent/src/api.ts" lines="75-94" hash="6554f2971671" blob="dfcb70f42eb2" */}
 
 | 方法 / 命令 | 参数 | 作用 |
 | --- | --- | --- |
 | `create` / `claude-agent.create` | `{workspace,prompt,model?}` | 新建会话并开始第一轮，返回 `{sessionId,round,model,accepted:true}`，只表示开始了 |
 | `send` / `claude-agent.send` | `{workspace,sessionId,prompt,interrupt?}` | 续一轮；上一轮还在跑时不带 `interrupt` 报错，带 `interrupt:true` 先结束它（那一轮记 `failed`）再开 |
 | `status` / `claude-agent.status` | `{workspace,sessionId}` | `running` 以外都是这一轮结束了；`completed` 带最终回答，`failed` 带原因；`running` 时带进度 `{toolCalls,lastTool,lastText}` |
+| `waitRound`（只有服务方法） | `{workspace,sessionId,round}` | 等这一轮结束，交回结束时的记录；已经结束的立即交回。插件重载、被下一轮打断都算结束（`failed`）。只等最新一轮，轮次不对报错。没有对应的命令：命令经 MCP 调用，有单次超时，agent 用 `status` 查 |
 | `setupStatus` / `claude-agent.setup-status` | 无 | SDK 装好没有、各份模型配好没有，不含 token 的值 |
+
+`waitRound` 交回的是这一轮收尾那一刻的记录，记在这一轮自己身上，之后再开下一轮也不影响它；从运行表里删掉这一轮与写下结果在同一次串行操作里，没有「运行表里没了、状态还是 running」的间隙。测试在 `tests/runtime.test.ts` 的三条 `waitRound`：
+
+{/* ref file="../plugins/claude-agent/src/runtime.ts" lines="214-224" hash="6fb3663b8f77" blob="77e3a383e6f2" */}
 
 续一轮与打断。打断时先按进程树结束 Claude Code（`taskkill /T /F`），再让 SDK 收尾：Windows 上只结束 claude.exe 不会连带结束它用 Shell 工具开的命令，SDK 的 `close()` 等不到它自己退出时正是只结束 claude.exe。为了拿到 pid，Claude Code 由插件经 SDK 的 `spawnClaudeCodeProcess` 自己启动；插件卸载时在跑的一轮也这样结束：
 
-{/* ref file="../plugins/claude-agent/src/runtime.ts" lines="170-199" hash="d125da2ce3cc" blob="5fadcdfb904e" */}
+{/* ref file="../plugins/claude-agent/src/runtime.ts" lines="173-202" hash="d125da2ce3cc" blob="77e3a383e6f2" */}
 
-{/* ref file="../plugins/claude-agent/src/runtime.ts" lines="274-279" hash="5db59ce6b605" blob="5fadcdfb904e" */}
+{/* ref file="../plugins/claude-agent/src/runtime.ts" lines="293-298" hash="5db59ce6b605" blob="77e3a383e6f2" */}
 
 **给 SDK 子进程的环境去掉 Claude Code 的会话变量**：工作台可能由 Claude Code 会话启动，带着桌面版塞进来的变量时子进程改用桌面版的登录、盖掉第三方模型的 token（实验在 `probes/2610152150_third-party-auth/`）。`CLAUDE_*`、`ANTHROPIC_*` 这类名字只传 Windows 用户级、系统级长期环境变量里有的，那是用户自己设的，比如打开 PowerShell 工具的 `CLAUDE_CODE_USE_POWERSHELL_TOOL`，去掉它子会话就没有 Shell 工具；`~/.claude/settings.json` 的 `env` 由 Claude Code 自己读：
 
@@ -51,7 +56,7 @@ description: 服务 gwbClaudeAgent：经 Claude Agent SDK 跑无界面的 agent 
 | `cordis` | 服务基类 `Service` | — |
 | 用户装的 SDK | `@anthropic-ai/claude-agent-sdk` 0.3.299 起的 0.3.x，连同平台包里附带的 Claude Code | 开一轮时报错并指向 `claude-agent-setup` |
 
-{/* ref file="../plugins/claude-agent/src/index.ts" lines="29-29" hash="f3e25754b611" blob="63f96c4966e1" */}
+{/* ref file="../plugins/claude-agent/src/index.ts" lines="31-31" hash="f3e25754b611" blob="497f7a5021ff" */}
 
 ## 不做的事
 

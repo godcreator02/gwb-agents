@@ -1,6 +1,6 @@
 {
   "name": "@godcreator/gwb-claude-agent",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "经 Claude Agent SDK 跑无界面的 agent 会话，模型可换（本机 Claude 或任何 Anthropic 兼容接口）：服务 gwbClaudeAgent 新建、续聊、打断、读进度；SDK 由用户用 npm 装，不打包。",
   "type": "module",
   "exports": {

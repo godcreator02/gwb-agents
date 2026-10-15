@@ -7,7 +7,9 @@ import type {} from '@godcreator/gwb-data'
 import type {} from '@godcreator/gwb-skills'
 import type {
   ClaudeAgentCreateInput,
+  ClaudeAgentRoundInput,
   ClaudeAgentSendInput,
+  ClaudeAgentSession,
   ClaudeAgentSessionInput,
   ClaudeAgentSetupStatus,
   ClaudeAgentStarted,
@@ -121,6 +123,7 @@ export default class GwbClaudeAgent extends Service implements GwbClaudeAgentApi
   create(input: ClaudeAgentCreateInput): Promise<ClaudeAgentStarted> { return this.runtime.create(input) }
   send(input: ClaudeAgentSendInput): Promise<ClaudeAgentStarted> { return this.runtime.send(input) }
   status(input: ClaudeAgentSessionInput): Promise<ClaudeAgentStatus> { return this.runtime.status(input) }
+  waitRound(input: ClaudeAgentRoundInput): Promise<ClaudeAgentSession> { return this.runtime.waitRound(input) }
 
   async setupStatus(): Promise<ClaudeAgentSetupStatus> {
     const ctx = this.providerContext

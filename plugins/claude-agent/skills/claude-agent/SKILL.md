@@ -27,5 +27,5 @@ description: 要把任务交给无界面的 Claude Code agent（经 Claude Agent
 ## 注意
 
 - 同一个工作区可以同时开几条会话，插件不管占用：改不改到同一个文件由派任务的一方安排
-- 插件不管回报：要 agent 做完通知谁，写进任务说明
+- 插件不管回报：要 agent 做完通知谁，写进任务说明。别的插件要等一轮做完，用服务方法 `gwbClaudeAgent.waitRound`，不轮询 `status`
 - 要人在界面上看着执行的活交给 ZCode（说明书 `zcode`）

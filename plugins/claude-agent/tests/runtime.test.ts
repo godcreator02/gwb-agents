@@ -155,6 +155,42 @@ describe('claude-agent 会话', () => {
     expect(read()).toMatchObject({ sessions: [{ sessionId: started.sessionId, status: 'failed', text: expect.stringContaining('被结束') as unknown }] })
   })
 
+  it('waitRound 等到这一轮结束才交回结果；已经结束的立即交回', async () => {
+    const { runtime, rounds } = setup()
+    const started = await runtime.create({ workspace, prompt: '任务' })
+    let settled = false
+    const waiting = runtime.waitRound({ workspace, sessionId: started.sessionId, round: 1 }).then((ended) => { settled = true; return ended })
+    rounds[0]!.push(assistant([{ type: 'text', text: '还在做' }]))
+    await new Promise((resolve) => setTimeout(resolve, 20))
+    expect(settled).toBe(false)
+    rounds[0]!.push(result('## 做完了'))
+    rounds[0]!.end()
+    await expect(waiting).resolves.toMatchObject({ round: 1, status: 'completed', text: '## 做完了' })
+    await expect(runtime.waitRound({ workspace, sessionId: started.sessionId, round: 1 })).resolves.toMatchObject({ status: 'completed', text: '## 做完了' })
+  })
+
+  it('waitRound 遇到卸载、被下一轮打断都交回 failed，不会一直等', async () => {
+    const reloaded = setup()
+    const first = await reloaded.runtime.create({ workspace, prompt: '长任务' })
+    const waitingReload = reloaded.runtime.waitRound({ workspace, sessionId: first.sessionId, round: 1 })
+    await reloaded.runtime.dispose()
+    await expect(waitingReload).resolves.toMatchObject({ status: 'failed', text: expect.stringContaining('被结束') as unknown })
+    const interrupted = setup()
+    const second = await interrupted.runtime.create({ workspace, prompt: '长任务' })
+    const waitingInterrupt = interrupted.runtime.waitRound({ workspace, sessionId: second.sessionId, round: 1 })
+    await interrupted.runtime.send({ workspace, sessionId: second.sessionId, prompt: '换个做法', interrupt: true })
+    await expect(waitingInterrupt).resolves.toMatchObject({ round: 1, status: 'failed', text: expect.stringContaining('被下一轮打断') as unknown })
+    interrupted.rounds[1]!.end()
+  })
+
+  it('waitRound 只等最新一轮，轮次不对直接报错', async () => {
+    const { runtime, rounds } = setup()
+    const started = await runtime.create({ workspace, prompt: '任务' })
+    await expect(runtime.waitRound({ workspace, sessionId: started.sessionId, round: 2 })).rejects.toThrow('最新的是第 1 轮')
+    await expect(runtime.waitRound({ workspace, sessionId: started.sessionId, round: 0 })).rejects.toThrow('正整数')
+    rounds[0]!.end()
+  })
+
   it('取值不对或配置不对直接报错，不开这一轮', async () => {
     const { runtime, rounds, prepareRound } = setup()
     await expect(runtime.create({ workspace: 'relative', prompt: '任务' })).rejects.toThrow('绝对路径')

@@ -23,18 +23,25 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 // 上一次构建留下的文件会随 files 白名单一起发出去，先清空
 fs.rmSync(path.join(here, 'dist'), { recursive: true, force: true })
 
-await build({
-  entryPoints: ['src/index.ts'],
-  outfile: 'dist/index.js',
-  external: nodeSideExternals(),
-  format: 'esm',
-  platform: 'node',
-  target: 'node22',
-  bundle: true,
-  minify: false,
-  legalComments: 'none',
-  logLevel: 'warning',
-  absWorkingDir: here,
-})
+/** 插件本体，加上给 Monitor 用的等待脚本（只用 node 内置模块，用户直接 node 运行） */
+const entries = [
+  { source: 'src/index.ts', output: 'dist/index.js' },
+  { source: 'src/wait-round-main.ts', output: 'dist/wait-round.js' },
+]
 
-console.log('[zcode] dist/index.js ← src/index.ts')
+for (const { source, output } of entries) {
+  await build({
+    entryPoints: [source],
+    outfile: output,
+    external: nodeSideExternals(),
+    format: 'esm',
+    platform: 'node',
+    target: 'node22',
+    bundle: true,
+    minify: false,
+    legalComments: 'none',
+    logLevel: 'warning',
+    absWorkingDir: here,
+  })
+  console.log(`[zcode] ${output} ← ${source}`)
+}

@@ -1,3 +1,4 @@
+import path from 'node:path'
 import { Service } from 'cordis'
 import type { GwbContext } from '@godcreator/gwb-kernel-desktop'
 // 空的类型 import 只为让这几个包的 `declare module 'cordis'` 生效，ctx 上才有对应服务的类型
@@ -5,6 +6,7 @@ import type {} from '@godcreator/gwb-commands'
 import type {} from '@godcreator/gwb-skills'
 import {
   type ArchivedTask,
+  type DispatchedRound,
   type GwbZcodeApi,
   type OpenedWorkspace,
   type SentRound,
@@ -21,6 +23,7 @@ import { registerZcodeCommands } from './commands.js'
 import { withDesktop } from './desktop.js'
 import { createTask, readRound, sendRound } from './round.js'
 import { keepReplyTail } from './task-progress.js'
+import { buildWaitCommand } from './wait-round.js'
 import { openWorkspace } from './workspace.js'
 
 export * from './api.js'
@@ -60,21 +63,38 @@ export default class GwbZcode extends Service implements GwbZcodeApi {
     return opened
   }
 
-  async create({ workspace, prompt }: ZcodeCreateInput): Promise<SentRound> {
+  async create({ workspace, prompt }: ZcodeCreateInput): Promise<DispatchedRound> {
     requireExistingWorkspace(workspace)
-    return withDesktop(this.logWarn, async (services) => {
+    const sent = await withDesktop(this.logWarn, async (services) => {
       const taskId = await createTask(services, workspace)
       this.logInfo(`在 ${workspace} 新建会话 ${taskId}`)
       return sendRound(services, { workspace, taskId, prompt })
     })
+    return this.withWaitCommand(workspace, sent)
   }
 
-  async send({ workspace, task, prompt, interrupt = false }: ZcodeSendInput): Promise<SentRound> {
+  async send({ workspace, task, prompt, interrupt = false }: ZcodeSendInput): Promise<DispatchedRound> {
     requireExistingWorkspace(workspace)
-    return withDesktop(this.logWarn, async (services) => {
+    const sent = await withDesktop(this.logWarn, async (services) => {
       this.logInfo(interrupt ? `打断会话 ${task} 当前这一轮、立即发指令` : `往会话 ${task} 发指令`)
       return sendRound(services, { workspace, taskId: task, prompt, interrupt })
     })
+    return this.withWaitCommand(workspace, sent)
+  }
+
+  /**
+   * 等待脚本是本包产物 dist/wait-round.js，它经本 home 的 gwb-mcp 命令行客户端回来调 zcode.status。
+   * 两个都取 home 的 node_modules 下的路径：pnpm 的真实目录名带版本，升级后就不在了
+   */
+  private withWaitCommand(workspace: string, sent: SentRound): DispatchedRound {
+    const homeDir = this.providerContext.gwbKernel.dataDir
+    const waitCommand = buildWaitCommand(path.join(homeDir, 'node_modules', '@godcreator', 'gwb-zcode', 'dist', 'wait-round.js'), {
+      client: path.join(homeDir, 'node_modules', '@godcreator', 'gwb-mcp', 'bin', 'client.mjs'),
+      home: path.basename(homeDir),
+      workspace,
+      task: sent.taskId,
+    })
+    return { ...sent, waitCommand }
   }
 
   async status({ workspace, task, waitSeconds = 0, replyTailChars }: ZcodeStatusInput): Promise<ZcodeRoundStatus> {

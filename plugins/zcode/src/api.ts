@@ -36,6 +36,14 @@ export interface ZcodeStatusInput extends ZcodeTaskInput {
   replyTailChars?: number
 }
 
+export interface DispatchedRound extends SentRound {
+  /**
+   * 交给 Claude Code 的 Monitor 的命令行：等这一轮结束打一行 `ZCODE-ROUND-OVER {…}`（出错打 `ZCODE-WAIT-FAILED …`）后退出。
+   * 经本 home 的 gwb-mcp 命令行客户端调 zcode.status，home 里没装 gwb-mcp 时运行它会报错
+   */
+  waitCommand: string
+}
+
 export interface ZcodeRoundStatus extends RoundState {
   /** 代理进程实际用的模式，不是侧栏上会落后的显示值 */
   mode: string
@@ -52,9 +60,9 @@ export interface GwbZcodeApi {
   /** 把窗口切到这个工作区（已存在的目录）；侧栏只显示窗口当前工作区的会话 */
   open(input: ZcodeWorkspaceInput): Promise<OpenedWorkspace>
   /** 新建会话并发出第一轮，这一轮在快照里开始了就交回，不等做完 */
-  create(input: ZcodeCreateInput): Promise<SentRound>
+  create(input: ZcodeCreateInput): Promise<DispatchedRound>
   /** 往已有会话续一轮；上一轮还在跑时 ZCode 自己把它排在后面，interrupt 为 true 时打断上一轮立即发出 */
-  send(input: ZcodeSendInput): Promise<SentRound>
+  send(input: ZcodeSendInput): Promise<DispatchedRound>
   /** 读最新一轮：roundIsOver 为 true 才是做完，replies 最后一条是收尾的话 */
   status(input: ZcodeStatusInput): Promise<ZcodeRoundStatus>
   /** 归档一条会话（还在跑的拒绝）；workspace 目录不在了也能归档 */

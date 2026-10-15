@@ -5,8 +5,10 @@ import { MAX_WAIT_SECONDS, type GwbZcodeApi } from './api.js'
 /** zcode.* 命令是服务 gwbZcode 的薄封装，给经 MCP 来的 agent 用：只查参数形状，然后调同名服务方法 */
 
 const SENT_SHAPE =
-  '发出后等这一轮在 ZCode 里开始了就交回（通常 2 秒左右），不等它做完：回 { taskId, title, status, mode, roundStarted }。' +
-  '做完没有用 zcode.status 查；roundStarted 为 false 表示 30 秒内这一轮还没开始（多半排在同一会话还在跑的上一轮后面），这时 zcode.status 读到的仍是上一轮'
+  '发出后等这一轮在 ZCode 里开始了就交回（通常 2 秒左右），不等它做完：回 { taskId, title, status, mode, roundStarted, waitCommand }。' +
+  'roundStarted 为 false 表示 30 秒内这一轮还没开始（多半排在同一会话还在跑的上一轮后面），这时 zcode.status 读到的仍是上一轮。' +
+  'waitCommand 是一条命令行：在 Claude Code 里原样交给 Monitor 工具在后台等，这一轮结束时打一行 ZCODE-ROUND-OVER {taskId,status,mode,pendingPermissions,lastReplyTail} 后退出，' +
+  '出错打一行 ZCODE-WAIT-FAILED <原因>；Monitor 到时限前没等到就用同一条命令再开一次。收到结束那一行后用 zcode.status 读完整回答。没有 Monitor 的客户端用 zcode.status 轮询'
 
 export function registerZcodeCommands(ctx: GwbContext, zcode: GwbZcodeApi): void {
   const commands = ctx.gwbCommands

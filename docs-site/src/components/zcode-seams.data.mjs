@@ -11,6 +11,7 @@ export const modules = [
   { id: 'main', title: 'ZCode 主进程', lines: ['启动时带', '--remote-debugging-port=9339'], x: 630, y: 214, w: 220, h: 86, color: '#b2f7b1' },
   { id: 'window', title: 'ZCode 工作区窗口', lines: ['9339 端口上唯一的工作区页面', 'React 树里的 zcodeTaskService', '/ zcodeAgentService'], x: 300, y: 380, w: 260, h: 104, color: '#ff9bd2' },
   { id: 'session', title: 'ZCode 会话', lines: ['按完全访问（yolo）执行', '出现在侧栏里'], x: 640, y: 380, w: 200, h: 86, color: '#ffb385' },
+  { id: 'waiter', title: '等待脚本', lines: ['dist/wait-round.js', 'Monitor 在后台运行', '经 gwb-mcp 客户端回调'], x: 20, y: 380, w: 200, h: 104, color: '#c3b1e1' },
 ]
 
 /** 每条都是一次调用，没有读写磁盘的接缝 */
@@ -62,6 +63,14 @@ export const seams = [
     label: [628, 160],
     title: '插件 → 主进程（启动参数）',
     text: 'zcode.open 运行 ZCode.exe --open-workspace <目录>：ZCode 只允许一个实例，第二个实例把参数转给正在运行的主进程后退出，窗口切到那个工作区。之后经接缝 3 读回窗口当前的工作区核对。',
+  },
+  {
+    n: 7,
+    from: [220, 400],
+    to: [350, 144],
+    label: [296, 250],
+    title: '等待脚本 → 插件（经 MCP 入口）',
+    text: 'create / send 回执里的 waitCommand 运行本包的 dist/wait-round.js，参数是一段 base64url。Claude Code 的 Monitor 在后台运行它：脚本经本 home 的 gwb-mcp 命令行客户端循环调 zcode.status（每次等 120 秒），等的过程中不输出；这一轮结束打一行 ZCODE-ROUND-OVER，出错打一行 ZCODE-WAIT-FAILED，然后退出。',
   },
 ]
 

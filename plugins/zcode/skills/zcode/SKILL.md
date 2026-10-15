@@ -20,18 +20,22 @@ description: 要把任务交给本机的 ZCode（另一个 AI 客户端，走 GL
    - 要先读哪些规矩（目标仓的 `AGENTS.md`、相关说明书 `skill.read`；ZCode 接了 gwb 的 MCP 入口，能自己调命令）
    - 做完怎么算完：要跑的检查命令、交回什么（改了哪些文件、检查输出）
    - 不要提交、不要推送，除非这次就是要它提交
-4. `run {"command":"zcode.create","args":{"workspace":"<目录的绝对路径>","prompt":"<任务说明>"}}`，记下回执里的 `taskId`
-5. 轮询：`zcode.status {"workspace":"<同上>","task":"<taskId>","waitSeconds":240}`，`roundIsOver` 为 `false` 就再调一次，直到为 `true`。
-   `waitSeconds` 最多 240：MCP 客户端等一次调用有上限（Claude Code 是 300 秒），别想着一次等到底；中间可以先去干别的，回头再查
-6. 做完了读 `replies` 最后一条，再去复查（下一节）。ZCode 会把工具调用记录也写进回答，一轮看图、读文件多的回答能有几万字，
+4. `run {"command":"zcode.create","args":{"workspace":"<目录的绝对路径>","prompt":"<任务说明>"}}`，记下回执里的 `taskId` 与 `waitCommand`
+5. 在后台等它做完：Claude Code 里把 `waitCommand` 原样交给 Monitor 工具（`command` 填它，`timeout_ms` 填 1800000），接着去干别的。
+   这一轮结束时 Monitor 收到一行 `ZCODE-ROUND-OVER {taskId,status,mode,pendingPermissions,lastReplyTail}`，脚本随即退出；出错收到一行 `ZCODE-WAIT-FAILED <原因>`。
+   Monitor 到时限还没等到，就用同一条 `waitCommand` 再开一个。`waitCommand` 经本 home 的 gwb-mcp 命令行客户端调 `zcode.status`，home 里要装着 gwb-mcp。
+   没有 Monitor 的客户端改成轮询：`zcode.status {"workspace":"<同上>","task":"<taskId>","waitSeconds":240}`，`roundIsOver` 为 `false` 就再调一次。
+   `waitSeconds` 最多 240：MCP 客户端等一次调用有上限（Claude Code 是 300 秒）
+6. 做完了用 `zcode.status`（不带 `waitSeconds`）读 `replies` 最后一条，再去复查（下一节）。ZCode 会把工具调用记录也写进回答，一轮看图、读文件多的回答能有几万字，
    回执超过 MCP 单次返回的上限就交不回来：这时带上 `"replyTailChars":20000`，只取回答末尾（收尾的总结在最后）
 
 **完成判据**：`status` 回执 `roundIsOver` 为 `true`、`status` 为 `completed`、`mode` 为 `yolo`；复查通过。
 
 ## 接着干
 
-- 同一个会话续上：`zcode.send {"workspace":"<建它时的目录>","task":"<taskId>","prompt":"<接着做什么>"}`，ZCode 记得前面几轮；之后照样用 `status` 轮询
-- 上一轮还没做完就 `send`，新指令排在后面，等这一轮做完才读到，回执 `roundStarted` 可能是 `false`：这时 `status` 读到的还是上一轮，等它做完再查
+- 同一个会话续上：`zcode.send {"workspace":"<建它时的目录>","task":"<taskId>","prompt":"<接着做什么>"}`，ZCode 记得前面几轮；回执里同样有 `waitCommand`，照上面第 5 步在后台等
+- 上一轮还没做完就 `send`，新指令排在后面，等这一轮做完才读到，回执 `roundStarted` 可能是 `false`：这时 `status` 读到的还是上一轮，
+  `waitCommand` 等到的也是上一轮结束。收到结束那一行后用 `status` 看 `replies` 是不是回答这条指令的，不是就再开一次 `waitCommand`
 - **派出去的任务要中途纠正**（说明写漏了、卡在没用的命令上）：`send` 带 `"interrupt":true`，不排队，当场取消它正在跑的命令、用这条指令开新的一轮，前面的上下文还在（同界面上排队消息的「立即」）。
   不带它的话，一个任务只有一轮时，纠正要等整个任务做完才送到。它正在跑数据迁移、写盘这类中途打断会留下半截结果的命令时别用；自己替它结束了卡住的进程，也要这样告诉它一声
 - `pendingPermissions` 非空：停在等人确认，请用户去 ZCode 界面处理
@@ -48,7 +52,7 @@ ZCode 说「做完了」不算数：自己跑一次它说跑过的检查，`git 
 
 ## 批量派任务
 
-一项一个会话，可以先把几项都 `create` 出去（同一个工作区也行），再轮流 `status`：同一个 home 的命令共用连接，不同 home 各用自己的连接。命令结束只断开自己的连接，不会因为一个 home 完成查询而中断另一个 home。别把几十项塞进一个会话，上下文越拖越长，后面容易乱。
+一项一个会话，可以先把几项都 `create` 出去（同一个工作区也行），每个会话各开一个 Monitor 等它的 `waitCommand`：同一个 home 的命令共用连接，不同 home 各用自己的连接。命令结束只断开自己的连接，不会因为一个 home 完成查询而中断另一个 home。别把几十项塞进一个会话，上下文越拖越长，后面容易乱。
 
 遇到连接断开或请求超时，发送可能已经完成，先核对侧栏或已知会话的 `zcode.status`，不要直接重发任务。
 

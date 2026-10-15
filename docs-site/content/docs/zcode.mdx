@@ -25,20 +25,21 @@ ZCode 插件对应包 `@godcreator/gwb-zcode`（`plugins/zcode/`，入口 `src/i
 
 两种调用方走两条入口，背后是同一份实现。**别的插件**（qq-bot、协作站）inject 服务 `gwbZcode` 调方法，有类型、出错直接抛异常；服务名与方法签名就是本包给 cordis `Context` 补的那一项，类型从本包的 `dist/index.d.ts` 取：
 
-{/* ref file="../plugins/zcode/src/index.ts" lines="98-102" hash="4ffd736c069f" blob="2ab820cf079c" */}
+{/* ref file="../plugins/zcode/src/index.ts" lines="118-122" hash="4ffd736c069f" blob="8a722ee3662c" */}
 
 **进程外的 agent** 经 MCP 入口 `run` 调 `zcode.*` 命令。命令是服务方法的薄封装：只查参数形状（认不出的键直接报错，比如多给一个 `mode` 不会被悄悄忽略，权限只有完全访问一种），然后调同名方法：
 
 {/* ref file="../plugins/zcode/src/args.ts" lines="9-16" hash="a79674b46996" blob="9f5f8a9bc7ec" */}
 
-{/* ref file="../plugins/zcode/src/commands.ts" lines="40-40" hash="92493ad22dbb" blob="2308335e057d" */}
+{/* ref file="../plugins/zcode/src/commands.ts" lines="42-42" hash="92493ad22dbb" blob="293cca35c037" */}
 
 取值的含义两条入口都要查，所以放在服务方法里：`workspace` 要是已存在目录的绝对路径（它要读磁盘）；`archive` 只查是不是绝对路径，目录删了的旧会话也要能收起来：
 
 {/* ref file="../plugins/zcode/src/checks.ts" lines="11-14" hash="d43a8e7161ff" blob="46c2c86d4f9d" */}
 
 **没有一个方法会一直等到 ZCode 做完。**MCP 客户端等一次调用有上限，Claude Code 是 300 秒没有动静就放弃，而 ZCode 做一个任务常常超过这个时间。
-所以 `create` / `send` 发出就返回，`status` 的 `waitSeconds` 最多 240 秒、做完提前交回，调用方隔一阵问一次（轨迹卡[「发出即返回」](/trajectory/2026-10-02-dispatch-then-poll)）：
+所以 `create` / `send` 发出就返回，`status` 的 `waitSeconds` 最多 240 秒、做完提前交回（轨迹卡[「发出即返回」](/trajectory/2026-10-02-dispatch-then-poll)）。
+Claude Code 里的 agent 不用自己隔一阵问一次：回执里的 `waitCommand` 交给 Monitor 在后台等，见接缝 7：
 
 {/* ref file="../plugins/zcode/src/api.ts" lines="8-9" hash="ce72ed6731b8" blob="105f68ba60a1" */}
 
@@ -134,7 +135,7 @@ ZCode 收下了却没按 `startNow` 投递时直接报错，写明它实际怎�
 局部注入 `gwbSkills`，登记包里的 `skills/` 目录（相对产物写作 `'../skills/'`，所以 `skills` 在 `package.json` 的 `files` 里）。
 说明书 `zcode` 告诉 agent 什么时候派任务、任务说明怎么写、怎么查询结果、回执怎么读。缺了说明书插件，服务与命令照常可用：
 
-{/* ref file="../plugins/zcode/src/index.ts" lines="50-52" hash="9cc8f78c4e7c" blob="2ab820cf079c" */}
+{/* ref file="../plugins/zcode/src/index.ts" lines="53-55" hash="9cc8f78c4e7c" blob="8a722ee3662c" */}
 
 ### 6 插件 → 主进程（启动参数）
 
@@ -154,6 +155,26 @@ ZCode 收下了却没按 `startNow` 投递时直接报错，写明它实际怎�
 
 测试：`tests/workspace.test.ts` 测路径比较；切换本身要真的开着 ZCode，在隔离 home 里调命令验证（轨迹卡[「用启动参数切工作区」](/trajectory/2026-10-03-open-workspace-argument)）。
 
+### 7 等待脚本 → 插件（经 MCP 入口）
+
+Claude Code 的 Monitor 工具在后台运行一条命令，把它标准输出的每一行当一次通知，命令退出就结束。`create` / `send` 的回执带上这样一条命令 `waitCommand`，
+agent 原样交给 Monitor，不用自己隔一阵调一次 `status`（轨迹卡[「用 Monitor 等结束」](/trajectory/2026-10-16-monitor-wait-round)）。
+命令运行本包的第二个产物 `dist/wait-round.js`。脚本与 gwb-mcp 命令行客户端都取 home 的 `node_modules` 下的路径，home 名取 home 目录名：
+
+{/* ref file="../plugins/zcode/src/index.ts" lines="85-98" hash="7e8202af983a" blob="8a722ee3662c" */}
+
+Monitor 可能用 bash 也可能用 pwsh 运行这条命令，两边的引号与转义规则不同。所以脚本路径只用普通双引号括起来，工作区、会话这些参数整个编成一段 base64url：
+
+{/* ref file="../plugins/zcode/src/wait-round.ts" lines="24-34" hash="3617dfca0dad" blob="9ef5398e0c60" */}
+
+脚本经 gwb-mcp 的命令行客户端回到这个 home 的 MCP 入口，循环调 `zcode.status`，每次等 120 秒（客户端的 HTTP 时限放到 150 秒）。等的过程中不输出任何东西，
+这一轮停下时打一行 `ZCODE-ROUND-OVER`、出错打一行 `ZCODE-WAIT-FAILED`，然后退出：
+
+{/* ref file="../plugins/zcode/src/wait-round.ts" lines="84-92" hash="c7acfdcd7c1a" blob="9ef5398e0c60" */}
+
+home 里没装 gwb-mcp 时脚本报错退出，隔离 home 的基础插件里没有它，要验证这条路得先装上。
+测试：`tests/wait-round.test.ts` 测命令行拼出来能原样读回、参数错了直接报错、结束那一行只有一行；Monitor 整条流程在装了 gwb-mcp 的隔离 home 里验证。
+
 ## 对外能做什么
 
 服务 `gwbZcode` 的 `open` 把窗口切到一个工作区；`create` 在一个工作区里新建会话、发任务；`send` 在已有会话里接着发；`status` 读最新一轮的进度与回答；`archive` 归档一个会话。
@@ -170,11 +191,12 @@ ZCode 收下了却没按 `startNow` 投递时直接报错，写明它实际怎�
 | 内核包 `gwb-kernel-desktop` | 接口类型 | — |
 | ZCode 桌面端（本机安装、开着，带 `--remote-debugging-port=9339` 启动） | 一切：切工作区、建会话、切模式、发指令、读快照 | 没开报「应有一个 ZCode 主进程」；没带参数报「ZCode 不是带 … 启动的」并写明怎么重开 |
 | `pwsh` | 列进程找 ZCode 主进程 | 命令报「找 ZCode 主进程失败」 |
+| MCP 入口 `gwb-mcp`（同一个 home 里装着；不写 peer，插件本身不用它） | `waitCommand` 经它的命令行客户端回调 `zcode.status` | 服务与命令照常；等待脚本打一行 `ZCODE-WAIT-FAILED` 退出，改用 `zcode.status` 轮询 |
 
 ## 不做的事
 
 - **不提供别的权限模式**：一律完全访问，没有模式参数（轨迹卡[「一律完全访问」](/trajectory/2026-10-02-full-access-only)）
-- **不一直等到 ZCode 做完**：发出即返回，结果用 `zcode.status` 查（轨迹卡[「发出即返回」](/trajectory/2026-10-02-dispatch-then-poll)）
+- **不一直等到 ZCode 做完**：发出即返回，结果用 `zcode.status` 查，要在后台等到底就把 `waitCommand` 交给 Monitor（轨迹卡[「发出即返回」](/trajectory/2026-10-02-dispatch-then-poll)）
 - **不取消任务、不列会话、不取消归档**：只做切工作区、派任务、查结果、归档
 - **不归档还在跑的会话**：归档后人就看不见它在执行
 - **不用 ZCode 的 CLI 无界面模式**：会话不进侧栏，人看不见（轨迹卡[「要侧栏可见」](/trajectory/2026-10-02-desktop-visible-over-cli)）

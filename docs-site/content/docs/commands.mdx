@@ -7,7 +7,7 @@ description: zcode.open、zcode.create、zcode.send、zcode.status、zcode.archi
 `zcode.open` 改 ZCode 窗口显示的工作区，标 `write`；`zcode.status` 只读快照，标 `read`；`zcode.archive` 改 ZCode 的任务索引，标 `write`。
 五条命令都要 ZCode 带 `--remote-debugging-port=9339` 启动：插件只连这个端口，不开也不关；命令结束断开自己的连接，不影响其他 home。
 
-一次派任务的流程：要让人在侧栏里看见就先 `open` 那个目录 → `create`（或 `send`）拿到 `taskId` → 按需查 `status` → 不再用的会话 `archive`。要不要回报、报给谁由派任务的一方写进任务说明，这些命令不参与。
+一次派任务的流程：要让人在侧栏里看见就先 `open` 那个目录 → `create`（或 `send`）拿到 `taskId` 与 `waitCommand` → Monitor 在后台等 `waitCommand` 打出结束那一行 → `status` 读回答 → 不再用的会话 `archive`。要不要回报、报给谁由派任务的一方写进任务说明，这些命令不参与。
 
 ## zcode.open
 
@@ -52,7 +52,7 @@ description: zcode.open、zcode.create、zcode.send、zcode.status、zcode.archi
 
 两条派任务的命令回执相同：
 
-{/* ref file="../plugins/zcode/src/commands.ts" lines="7-9" hash="f956d2f08ad5" blob="2308335e057d" */}
+{/* ref file="../plugins/zcode/src/commands.ts" lines="7-11" hash="e73db2a83b4d" blob="293cca35c037" */}
 
 | 字段 | 说明 |
 | --- | --- |
@@ -61,6 +61,22 @@ description: zcode.open、zcode.create、zcode.send、zcode.status、zcode.archi
 | `status` | ZCode 的任务状态，刚发出时通常是 `running` |
 | `mode` | 代理进程实际用的权限模式，总是 `yolo` |
 | `roundStarted` | `false` 表示 30 秒内这一轮还没开始（多半排在同一会话还在跑的上一轮后面），这时 `zcode.status` 读到的仍是上一轮 |
+| `waitCommand` | 一条命令行，在 Claude Code 里原样交给 Monitor 工具在后台等这一轮结束，见下面「在后台等结束」 |
+
+### 在后台等结束
+
+`waitCommand` 运行本包的等待脚本 `dist/wait-round.js`，参数是一段 base64url（工作区、会话、home 名与 gwb-mcp 命令行客户端的路径），bash 与 pwsh 都能原样运行。
+脚本经这个 home 的 gwb-mcp 命令行客户端循环调 `zcode.status`（每次等 120 秒），等的过程中不输出任何东西；Monitor 把每一行输出当一次通知，所以只会收到一行：
+
+| 那一行 | 意思 |
+| --- | --- |
+| `ZCODE-ROUND-OVER {taskId,status,mode,pendingPermissions,lastReplyTail}` | 这一轮停下了（`roundIsOver` 为 `true`），退出码 0。`lastReplyTail` 是最后一条回答压成一行后的末尾 600 字，完整回答用 `zcode.status` 读 |
+| `ZCODE-WAIT-FAILED <原因>` | 等不下去了，退出码 1：home 里没装 gwb-mcp、`zcode.status` 报错（原因原样带上）、参数不对 |
+
+Monitor 单次最长 30 分钟，到时限还没等到就用同一条 `waitCommand` 再开一个。`roundStarted` 为 `false` 时等到的是上一轮结束，收到后用 `zcode.status` 核对 `replies`。
+没有 Monitor 的客户端照旧用 `zcode.status` 带 `waitSeconds` 轮询。
+
+{/* ref file="../plugins/zcode/src/wait-round.ts" lines="84-92" hash="c7acfdcd7c1a" blob="9ef5398e0c60" */}
 
 ## zcode.status
 

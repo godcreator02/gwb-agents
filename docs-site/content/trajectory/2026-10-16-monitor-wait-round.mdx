@@ -1,0 +1,36 @@
+---
+born-at: 2026-10-16T00:45
+type: choice
+parent: [2026-10-02-gwb-zcode]
+label: 用 Monitor 等结束
+domain: 任务通道
+---
+
+## 背景
+
+10-11 有个会话把 `zcode.status` 单次等待的上限从 240 秒提到 900 秒，改完一直没提交。10-16 修调试端口时问用户这批怎么处理，用户答：
+「这个不要了，应该做成用monitor后台等待结束才对」，随后要求「你来收尾，改monitor也做了」。那批改动存成补丁送进回收站，工作区还原。
+
+pivots-from:: [发出即返回](2026-10-02-dispatch-then-poll.md)
+
+## 结论与边界
+
+- `create` / `send` 的回执加字段 `waitCommand`：一条命令行，agent 原样交给 Claude Code 的 Monitor 在后台运行。它运行本包第二个产物 `dist/wait-round.js`，
+  经本 home 的 gwb-mcp 命令行客户端循环调 `zcode.status`（每次等 120 秒），这一轮停下时打一行 `ZCODE-ROUND-OVER {…}`，出错打一行 `ZCODE-WAIT-FAILED …`，然后退出；等的过程中不输出
+- `zcode.status` 的 240 秒上限不变，没有 Monitor 的客户端照旧轮询。脚本走 MCP 入口回调同一个服务方法，判断「这一轮做完」的逻辑只有服务里那一份
+- 命令行里脚本路径只用普通双引号，参数整个编成一段 base64url：Monitor 可能用 bash 也可能用 pwsh 运行它。第一版用 `JSON.stringify` 加引号，路径里的反斜杠成了两个，pwsh 会原样保留
+- 路径取 home 的 `node_modules` 下的固定位置，不取 pnpm 带版本号的真实目录：第一版取了 `import.meta.url`，拼出 `.pnpm\@godcreator+gwb-zcode@file+…` 这种升级后就不在的路径
+- 代价：依赖同一个 home 里装着 gwb-mcp（不写 peer，插件本身不用它）；隔离 home 的基础插件没有它，验证要先装上。Monitor 单次最长 30 分钟，过时限要再开一次
+- 回执加字段、加产物，按 gwb-release 升 y
+
+## 否掉的候选
+
+- **把 `zcode.status` 的单次等待提到 900 秒**：用户否掉；超过 MCP 客户端 300 秒的上限，调用会被客户端放弃
+- **等待脚本直接连 ZCode 的调试端口读快照**：不经 gwb，但要在脚本里再写一份「这一轮做完没有」的判断，跟服务里那份会走样
+- **`waitCommand` 只在命令里加、服务回执不带**：命令是服务的薄封装，只查参数形状，不另加东西
+
+## 依据
+
+隔离 home `zcode-monitor-2610160027`（装了 gwb-mcp 与开发版 0.4.3-dev）：往一条会话 `send` 跑 30 秒的指令，把回执里的 `waitCommand` 交给 Monitor，
+约 40 秒后收到一行 `ZCODE-ROUND-OVER {"taskId":"sess_82f98db6-…","status":"completed","mode":"yolo","pendingPermissions":0,"lastReplyTail":"…MONITOR-WAIT-OK-2"}`，脚本退出。
+不存在的会话 id 打一行 `ZCODE-WAIT-FAILED zcode.status 失败：… Session not found …`、退出码 1；参数个数不对同样只打一行。无探针目录，过程只在这次会话里跑过。

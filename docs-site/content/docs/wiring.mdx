@@ -26,7 +26,7 @@ description: gwb-zcode 提供的服务、命令与说明书，注入的服务与
 
 内核包 `@godcreator/gwb-kernel-desktop`（`^0.10.1`）只提供接口类型；`cordis`（`^4.0.0-rc.10`）提供服务基类 `Service`，按值 import，所以写进 peer。
 
-{/* ref file="../plugins/zcode/src/index.ts" lines="32-32" hash="a929b23854d9" blob="2ab820cf079c" */}
+{/* ref file="../plugins/zcode/src/index.ts" lines="35-35" hash="a929b23854d9" blob="8a722ee3662c" */}
 
 {/* ref file="../plugins/zcode/package.json" lines="33-43" hash="606d18d13843" blob="6ac422534b9f" */}
 
@@ -51,6 +51,8 @@ description: gwb-zcode 提供的服务、命令与说明书，注入的服务与
 | 模式值 | 两个服务 | `yolo`、`build` | 界面上的「完全访问」「变更前确认」 |
 | 启动参数 | `ZCode.exe` 的第二个实例 | `--open-workspace <目录>` | 让正在运行的 ZCode 把窗口切到这个工作区 |
 | React 树 | ZCode 工作区窗口 | 组件 `memoizedProps.activeWorkspacePath` | 读窗口当前的工作区，核对切没切成 |
+| 命令行 | gwb-mcp 的命令行客户端 | `<home>/node_modules/@godcreator/gwb-mcp/bin/client.mjs --home <home 名> --timeout <毫秒> run zcode.status <JSON>` | 等待脚本 `dist/wait-round.js` 回到本 home 的 MCP 入口查这一轮做完没有 |
+| 内核字段 | 内核 | `gwbKernel.dataDir` | home 目录：拼出等待脚本与命令行客户端的路径，目录名就是 home 名 |
 
 {/* ref file="../plugins/zcode/src/desktop.ts" lines="11-14" hash="b27bdd58d55b" blob="4d4211325757" */}
 

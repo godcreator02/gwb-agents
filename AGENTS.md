@@ -9,7 +9,7 @@ ZCode 插件 `@godcreator/gwb-zcode`（`plugins/zcode/`）：经 ZCode 工作区
 ## ZCode 约束
 
 - **权限一律完全访问（`yolo`）**：每次发指令前以代理的 `settings.mode.current` 为准切换并读回核对，不加模式参数
-- **不一直等到 ZCode 做完**：派任务的命令发出即返回，`zcode.status` 的等待不超过 240 秒（Claude Code 等一次 MCP 调用 300 秒就放弃）
+- **不一直等到 ZCode 做完**：派任务的命令发出即返回，`zcode.status` 的等待不超过 240 秒（Claude Code 等一次 MCP 调用 300 秒就放弃）；要等到底的交给回执里的 `waitCommand`，由 Claude Code 的 Monitor 在后台运行
 - **只做切工作区、派任务、查结果、归档**：不加取消任务、列会话、取消归档之类的命令，除非用户要；还在跑的会话不归档；`zcode.create` 不替调用方切工作区
 - **不用 ZCode CLI 无界面、不往 ZCode 的自动化表写行**：用户要侧栏看得见、不要绕路（理由见 `docs-site/content/trajectory/`）
 - **ZCode 的内部结构集中在 `src/desktop.ts` 与 `src/round.ts`**：React 树路径、服务方法名、模式值、启动参数。ZCode 升级后先核对文档站「插件之间怎么连」那张约定通道表

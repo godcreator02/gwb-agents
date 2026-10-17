@@ -9,9 +9,13 @@ import type { ZcodeRoundStatus } from './api.js'
  */
 
 const execFileAsync = promisify(execFile)
-/** 单次 zcode.status 等的秒数；客户端的 HTTP 时限比它长，留出回执余量 */
-const STATUS_WAIT_SECONDS = 120
-const CLIENT_TIMEOUT_MS = (STATUS_WAIT_SECONDS + 30) * 1000
+/** 单次 zcode.status 等的秒数 */
+const STATUS_WAIT_SECONDS = 60
+/** 几个会话同时等时 ZCode 窗口要轮流答，一次 zcode.status 实测比 waitSeconds 多花 10～60 秒，客户端的 HTTP 时限留足这段 */
+const CLIENT_TIMEOUT_MS = (STATUS_WAIT_SECONDS + 120) * 1000
+/** 客户端没交回回执（到了时限、连不上 MCP 入口）算暂时的，连续这么多次才报错；zcode.status 交回的失败回执直接报错 */
+export const MAX_CONSECUTIVE_NO_RECEIPT = 5
+const RETRY_DELAY_MS = 10_000
 /** 结束那一行只带最后一条回答的末尾，完整回答由调用方再调 zcode.status 读 */
 const REPLY_TAIL_CHARS = 600
 export const ROUND_OVER_PREFIX = 'ZCODE-ROUND-OVER'
@@ -63,6 +67,9 @@ export function describeRoundOver(round: ZcodeRoundStatus): string {
   })}`
 }
 
+/** 客户端退出码非零、标准输出是空的：它没拿到回执（命令失败的回执写在标准输出里），原因在标准错误 */
+class NoReceiptError extends Error {}
+
 async function readStatus({ client, home, workspace, task }: WaitOptions): Promise<ZcodeRoundStatus> {
   const statusArgs = JSON.stringify({ workspace, task, waitSeconds: STATUS_WAIT_SECONDS, replyTailChars: REPLY_TAIL_CHARS })
   let stdout: string
@@ -74,19 +81,38 @@ async function readStatus({ client, home, workspace, task }: WaitOptions): Promi
     ))
   } catch (error) {
     const { stdout: out = '', stderr = '' } = error as { stdout?: string; stderr?: string }
-    throw new Error(`zcode.status 失败：${`${out}${stderr}`.trim() || (error as Error).message}`)
+    if (out.trim() === '') throw new NoReceiptError(stderr.trim() || (error as Error).message)
+    throw new Error(`zcode.status 失败：${out.trim()}`)
   }
   const receipt = JSON.parse(stdout) as { ok?: unknown; data?: ZcodeRoundStatus }
   if (receipt.ok !== true || receipt.data === undefined) throw new Error(`zcode.status 失败：${stdout.trim()}`)
   return receipt.data
 }
 
-/** 一直等到这一轮结束；每次 zcode.status 最多等 STATUS_WAIT_SECONDS 秒，没结束就再问 */
-export async function waitRound(argv: string[]): Promise<string> {
+const sleep = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms))
+
+/**
+ * 一直等到这一轮结束；每次 zcode.status 最多等 STATUS_WAIT_SECONDS 秒，没结束就再问。
+ * 没交回回执的隔 retryDelayMs 再问，连续 MAX_CONSECUTIVE_NO_RECEIPT 次才报错
+ */
+export async function waitRound(argv: string[], { retryDelayMs = RETRY_DELAY_MS } = {}): Promise<string> {
   const options = parseWaitOptions(argv)
   if (!existsSync(options.client)) throw new Error(`找不到 gwb-mcp 的命令行客户端 ${options.client}：这个 home 没装 @godcreator/gwb-mcp`)
+  let consecutiveNoReceipt = 0
   for (;;) {
-    const round = await readStatus(options)
+    let round: ZcodeRoundStatus
+    try {
+      round = await readStatus(options)
+    } catch (error) {
+      if (!(error instanceof NoReceiptError)) throw error
+      consecutiveNoReceipt++
+      if (consecutiveNoReceipt >= MAX_CONSECUTIVE_NO_RECEIPT) {
+        throw new Error(`zcode.status 连续 ${consecutiveNoReceipt} 次没交回回执，最后一次：${error.message}`)
+      }
+      await sleep(retryDelayMs)
+      continue
+    }
+    consecutiveNoReceipt = 0
     if (round.roundIsOver) return describeRoundOver(round)
   }
 }

@@ -1,0 +1,43 @@
+---
+born-at: 2026-10-17T12:20
+type: evidence
+parent: [2026-10-02-gwb-zcode]
+label: 几个会话同时等
+domain: 任务通道
+---
+
+## 背景
+
+10-17 主会话批量迁文档站，同时派了 5 个 ZCode 会话，各开一个 Monitor 等 `waitCommand`。几分钟内有 4 个打出
+`ZCODE-WAIT-FAILED zcode.status 失败：TimeoutError: The operation was aborted due to timeout` 退出，之后单独调 `zcode.status`，那几个会话都还是 `running`。
+派任务的会话只好临时自己写了一个轮流查询的脚本（一次只发一个查询、超时下一轮重试）来等。
+
+pivots-from:: [用 Monitor 等结束](2026-10-16-monitor-wait-round.md)
+
+## 结论与边界
+
+- 超时出在 gwb-mcp 命令行客户端的 `--timeout`，不在插件对 ZCode 调试端口的请求。default 的 `gwb.log` 里那段时间每一次 `zcode.status` 都记成功；
+  插件里调试端口的超时报错带「连不上」「无响应」这类前缀，而这一行是客户端读响应体时被 `AbortSignal.timeout` 中止、`main().catch` 原样写出的 `String(err)`
+- 原因是一次 `zcode.status` 比 `waitSeconds` 慢：5 个会话同时等时 ZCode 窗口要轮流回答快照，带 `waitSeconds: 120` 的一次调用实际要 130～180 秒，越过了客户端的 150 秒
+- 等待脚本改成两处：单次 `waitSeconds` 降到 60 秒、客户端时限放到 180 秒，留出 120 秒给并发时多花的时间；客户端没交回回执（标准输出是空的：到了时限、连不上 MCP 入口）
+  算暂时的，隔 10 秒再查，连续 5 次才打 `ZCODE-WAIT-FAILED`。`zcode.status` 交回了失败回执（标准输出里有文字，如会话不存在）照旧直接报错，参数不对、找不到客户端也照旧
+- 判断「暂时」只看客户端有没有交回回执，不按报错文字匹配：gwb-mcp 客户端把命令失败的回执写在标准输出、把自己没拿到回执的原因写在标准错误，这个分法不随报错措辞变
+- 代价：工作台真的停了时，要多等约 5 次查询加 40 秒才报错；一次查询等得更短，同样时长里多调几次 `zcode.status`
+- 修 bug、不改命令与回执，按 gwb-release 升 y
+
+## 否掉的候选
+
+- **只把客户端时限放大、不重试**：并发再多一些还会越过，一次超时照样整个脚本退出
+- **任何失败都重试**：会话不存在这类命令失败重试也不会好，白等几十秒才报
+- **在插件里把 `zcode.status` 的等待截到 `waitSeconds` 以内**：慢在 ZCode 窗口回答快照，截了也只是把一次查询拆短，客户端时限与重试还是要有
+
+## 依据
+
+default 的 `%APPDATA%\gwb-kernel\homes\default\gwb.log`：10-17 03:08:41～03:09:32 五次 `zcode.create` 成功，之后 `zcode.status` 成批记成功，同一个 Monitor 前后两次成功相隔
+131～143 秒（如 03:11:43 → 03:14:07），没有一条记失败。改前在旧代码上跑新加的测试 `plugins/zcode/tests/wait-round.test.ts`，「没交回回执重试」那条报
+`Error: zcode.status 失败：TimeoutError: The operation was aborted due to timeout`，跟现场那一行相同；改后 40 条测试全过。
+
+隔离 home `zcode-wait-retry-2610171200`（装了 gwb-mcp 0.12 与开发版 0.4.5-dev）：派一条只运行 `Start-Sleep -Seconds 240` 的测试会话，对它同时开 5 个等待脚本
+（default 那边同时还有 3 个迁移会话在跑），5 个都在 245～248 秒打出 `ZCODE-ROUND-OVER`、退出码 0。会话 id 换成不存在的，4 秒打出
+`ZCODE-WAIT-FAILED zcode.status 失败：… Session not found …`，没有重试；home 名换成不存在的，客户端每次只在标准错误报「MCP 入口地址尚未就绪」，
+41 秒后打出 `ZCODE-WAIT-FAILED zcode.status 连续 5 次没交回回执，最后一次：…`。无探针目录。

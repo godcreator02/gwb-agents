@@ -24,6 +24,7 @@ description: 要把任务交给本机的 ZCode（另一个 AI 客户端，走 GL
 4. `run {"command":"zcode.create","args":{"workspace":"<目录的绝对路径>","prompt":"<任务说明>"}}`，记下回执里的 `taskId` 与 `waitCommand`
 5. 在后台等它做完：Claude Code 里把 `waitCommand` 原样交给 Monitor 工具（`command` 填它，`timeout_ms` 填 1800000），接着去干别的。
    这一轮结束时 Monitor 收到一行 `ZCODE-ROUND-OVER {taskId,status,mode,pendingPermissions,lastReplyTail}`，脚本随即退出；出错收到一行 `ZCODE-WAIT-FAILED <原因>`。
+   单次查询超时、连不上 MCP 入口，脚本自己隔 10 秒再查，连续 5 次都这样才报 `ZCODE-WAIT-FAILED`；收到它时会话多半还在跑，先用 `zcode.status` 核对，再用同一条 `waitCommand` 重开 Monitor。
    Monitor 到时限还没等到，就用同一条 `waitCommand` 再开一个。`waitCommand` 经本 home 的 gwb-mcp 命令行客户端调 `zcode.status`，home 里要装着 gwb-mcp。
    没有 Monitor 的客户端改成轮询：`zcode.status {"workspace":"<同上>","task":"<taskId>","waitSeconds":240}`，`roundIsOver` 为 `false` 就再调一次。
    `waitSeconds` 最多 240：MCP 客户端等一次调用有上限（Claude Code 是 300 秒）
@@ -53,7 +54,9 @@ ZCode 说「做完了」不算数：自己跑一次它说跑过的检查，`git 
 
 ## 批量派任务
 
-一项一个会话，可以先把几项都 `create` 出去（同一个工作区也行），每个会话各开一个 Monitor 等它的 `waitCommand`：同一个 home 的命令共用连接，不同 home 各用自己的连接。命令结束只断开自己的连接，不会因为一个 home 完成查询而中断另一个 home。别把几十项塞进一个会话，上下文越来越长，后面容易乱。
+一项一个会话，可以先把几项都 `create` 出去（同一个工作区也行），每个会话各开一个 Monitor 等它的 `waitCommand`，几个会话同时等是可以的，不用自己另写轮流查询的脚本。
+同时等的会话越多，ZCode 窗口要轮流回答，单次查询就越慢；等待脚本给单次查询留了余量，偶尔超时会自己重试（见「派一个任务」第 5 步）。
+同一个 home 的命令共用连接，不同 home 各用自己的连接。命令结束只断开自己的连接，不会因为一个 home 完成查询而中断另一个 home。别把几十项塞进一个会话，上下文越来越长，后面容易乱。
 
 遇到连接断开或请求超时，发送可能已经完成，先核对侧栏或已知会话的 `zcode.status`，不要直接重发任务。
 

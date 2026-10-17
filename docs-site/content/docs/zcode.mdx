@@ -80,7 +80,7 @@ Claude Code 里的 agent 不用自己隔一阵问一次：回执里的 `waitComm
 {/* ref file="../plugins/zcode/src/desktop.ts" lines="195-196" hash="0e94304281e9" blob="4d4211325757" */}
 
 端口归 ZCode 进程所有，随它退出关闭，可能同时被多个 home 或调试器使用。**同一 home 的并发命令共用一个连接**，最后一条结束只断开自己的 WebSocket；
-不同 home 各用自己的连接，一个机器人完成查询不会中断另一个的派发回执：
+不同 home 各用自己的连接，一个 home 的查询结束不会中断另一个 home 正在等的回执：
 
 {/* ref file="../plugins/zcode/src/desktop.ts" lines="215-250" hash="a46299878854" blob="4d4211325757" */}
 
@@ -167,15 +167,18 @@ agent 原样交给 Monitor，不用自己隔一阵调一次 `status`（轨迹卡
 
 Monitor 可能用 bash 也可能用 pwsh 运行这条命令，两边的引号与转义规则不同。所以脚本路径只用普通双引号括起来，工作区、会话这些参数整个编成一段 base64url：
 
-{/* ref file="../plugins/zcode/src/wait-round.ts" lines="24-34" hash="3617dfca0dad" blob="9ef5398e0c60" */}
+{/* ref file="../plugins/zcode/src/wait-round.ts" lines="28-38" hash="3617dfca0dad" blob="d21354b68178" */}
 
-脚本经 gwb-mcp 的命令行客户端回到这个 home 的 MCP 入口，循环调 `zcode.status`，每次等 120 秒（客户端的 HTTP 时限放到 150 秒）。等的过程中不输出任何东西，
-这一轮停下时打一行 `ZCODE-ROUND-OVER`、出错打一行 `ZCODE-WAIT-FAILED`，然后退出：
+脚本经 gwb-mcp 的命令行客户端回到这个 home 的 MCP 入口，循环调 `zcode.status`，每次等 60 秒，客户端的 HTTP 时限放到 180 秒：
+几个会话同时等时 ZCode 窗口要轮流回答，一次查询会比 `waitSeconds` 多花几十秒（轨迹卡[「几个会话同时等」](/trajectory/2026-10-17-wait-round-concurrent)）。
+客户端没交回回执（标准输出是空的：到了时限、连不上 MCP 入口）算暂时的，隔 10 秒再查，连续 5 次才算出错；`zcode.status` 交回的失败回执直接算出错。
+等的过程中不输出任何东西，这一轮停下时打一行 `ZCODE-ROUND-OVER`、出错打一行 `ZCODE-WAIT-FAILED`，然后退出：
 
-{/* ref file="../plugins/zcode/src/wait-round.ts" lines="84-92" hash="c7acfdcd7c1a" blob="9ef5398e0c60" */}
+{/* ref file="../plugins/zcode/src/wait-round.ts" lines="94-118" hash="fa4f52afa556" blob="d21354b68178" */}
 
 home 里没装 gwb-mcp 时脚本报错退出，隔离 home 的基础插件里没有它，要验证这条路得先装上。
-测试：`tests/wait-round.test.ts` 测命令行拼出来能原样读回、参数错了直接报错、结束那一行只有一行；Monitor 整条流程在装了 gwb-mcp 的隔离 home 里验证。
+测试：`tests/wait-round.test.ts` 测命令行拼出来能原样读回、参数错了直接报错、结束那一行只有一行，
+并用冒充 gwb-mcp 客户端的 `tests/fixtures/fake-mcp-client.mjs` 测没交回回执时重试、连续到上限才报错、失败回执不重试；Monitor 整条流程在装了 gwb-mcp 的隔离 home 里验证。
 
 ## 对外能做什么
 

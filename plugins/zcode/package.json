@@ -1,6 +1,6 @@
 {
   "name": "@godcreator/gwb-zcode",
-  "version": "0.4.4",
+  "version": "0.4.5",
   "description": "给运行中的 ZCode 桌面端派任务：服务 gwbZcode 切工作区、新建或续聊、完全访问、发出即返回、读最新一轮、归档；zcode.* 命令是它给 agent 的薄封装。",
   "type": "module",
   "exports": {

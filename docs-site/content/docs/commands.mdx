@@ -66,17 +66,18 @@ description: zcode.open、zcode.create、zcode.send、zcode.status、zcode.archi
 ### 在后台等结束
 
 `waitCommand` 运行本包的等待脚本 `dist/wait-round.js`，参数是一段 base64url（工作区、会话、home 名与 gwb-mcp 命令行客户端的路径），bash 与 pwsh 都能原样运行。
-脚本经这个 home 的 gwb-mcp 命令行客户端循环调 `zcode.status`（每次等 120 秒），等的过程中不输出任何东西；Monitor 把每一行输出当一次通知，所以只会收到一行：
+脚本经这个 home 的 gwb-mcp 命令行客户端循环调 `zcode.status`（每次等 60 秒），等的过程中不输出任何东西；Monitor 把每一行输出当一次通知，所以只会收到一行。
+客户端没交回回执（超过它的 HTTP 时限、连不上 MCP 入口）时脚本隔 10 秒再查，连续 5 次才报错，几个会话同时等不会因为单次查询慢而中断：
 
 | 那一行 | 意思 |
 | --- | --- |
 | `ZCODE-ROUND-OVER {taskId,status,mode,pendingPermissions,lastReplyTail}` | 这一轮停下了（`roundIsOver` 为 `true`），退出码 0。`lastReplyTail` 是最后一条回答压成一行后的末尾 600 字，完整回答用 `zcode.status` 读 |
-| `ZCODE-WAIT-FAILED <原因>` | 等不下去了，退出码 1：home 里没装 gwb-mcp、`zcode.status` 报错（原因原样带上）、参数不对 |
+| `ZCODE-WAIT-FAILED <原因>` | 等不下去了，退出码 1：home 里没装 gwb-mcp、`zcode.status` 交回了失败回执（原因原样带上）、连续 5 次没交回回执、参数不对 |
 
 Monitor 单次最长 30 分钟，到时限还没等到就用同一条 `waitCommand` 再开一个。`roundStarted` 为 `false` 时等到的是上一轮结束，收到后用 `zcode.status` 核对 `replies`。
 没有 Monitor 的客户端照旧用 `zcode.status` 带 `waitSeconds` 轮询。
 
-{/* ref file="../plugins/zcode/src/wait-round.ts" lines="84-92" hash="c7acfdcd7c1a" blob="9ef5398e0c60" */}
+{/* ref file="../plugins/zcode/src/wait-round.ts" lines="94-118" hash="fa4f52afa556" blob="d21354b68178" */}
 
 ## zcode.status
 

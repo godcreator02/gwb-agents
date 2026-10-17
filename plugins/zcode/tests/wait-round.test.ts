@@ -1,5 +1,9 @@
+import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
-import { buildWaitCommand, describeRoundOver, parseWaitOptions } from '../src/wait-round.js'
+import { MAX_CONSECUTIVE_NO_RECEIPT, buildWaitCommand, describeRoundOver, parseWaitOptions, waitRound } from '../src/wait-round.js'
 
 const OPTIONS = {
   client: 'C:\\Users\\me\\AppData\\Roaming\\gwb-kernel\\homes\\default\\node_modules\\@godcreator\\gwb-mcp\\bin\\client.mjs',
@@ -42,5 +46,50 @@ describe('结束那一行', () => {
     expect(payload).toMatchObject({ taskId: 'sess_1', status: 'completed', mode: 'yolo', pendingPermissions: 0 })
     expect(payload['lastReplyTail']).toMatch(/^…x+ 收尾$/)
     expect((payload['lastReplyTail'] as string).length).toBe(601)
+  })
+})
+
+const FAKE_CLIENT = fileURLToPath(new URL('./fixtures/fake-mcp-client.mjs', import.meta.url))
+type Step = { kind: 'no-receipt' } | { kind: 'failed-receipt'; text: string } | { kind: 'round'; roundIsOver: boolean }
+const NO_RECEIPT: Step = { kind: 'no-receipt' }
+const RUNNING: Step = { kind: 'round', roundIsOver: false }
+const OVER: Step = { kind: 'round', roundIsOver: true }
+
+/** 冒充的客户端把 --home 当场景目录，按 plan 依次交回结果 */
+function scenario(plan: Step[]): { argv: string[]; calls(): number } {
+  const dir = mkdtempSync(join(tmpdir(), 'zcode-wait-'))
+  writeFileSync(join(dir, 'plan.json'), JSON.stringify(plan))
+  return {
+    argv: [encode({ ...OPTIONS, client: FAKE_CLIENT, home: dir })],
+    calls: () => Number(readFileSync(join(dir, 'calls.txt'), 'utf8')),
+  }
+}
+
+// 每次查询都起一个 node 进程，一个用例最多起十来个
+describe('等待中查询没交回回执', { timeout: 30_000 }, () => {
+  it('客户端时限到了没交回回执，重试，等到这一轮结束', async () => {
+    const { argv, calls } = scenario([NO_RECEIPT, NO_RECEIPT, RUNNING, NO_RECEIPT, OVER])
+    expect(await waitRound(argv, { retryDelayMs: 0 })).toMatch(/^ZCODE-ROUND-OVER /)
+    expect(calls()).toBe(5)
+  })
+
+  it('中间交回过一次回执就重新计数，不连续的失败不累加', async () => {
+    const almostLimit = Array<Step>(MAX_CONSECUTIVE_NO_RECEIPT - 1).fill(NO_RECEIPT)
+    const { argv } = scenario([...almostLimit, RUNNING, ...almostLimit, OVER])
+    expect(await waitRound(argv, { retryDelayMs: 0 })).toMatch(/^ZCODE-ROUND-OVER /)
+  })
+
+  it(`连续 ${MAX_CONSECUTIVE_NO_RECEIPT} 次没交回回执才报错，带上最后一次的原因`, async () => {
+    const { argv, calls } = scenario([NO_RECEIPT])
+    await expect(waitRound(argv, { retryDelayMs: 0 })).rejects.toThrow(
+      `连续 ${MAX_CONSECUTIVE_NO_RECEIPT} 次没交回回执，最后一次：TimeoutError: The operation was aborted due to timeout`,
+    )
+    expect(calls()).toBe(MAX_CONSECUTIVE_NO_RECEIPT)
+  })
+
+  it('zcode.status 交回了失败回执就直接报错，不重试', async () => {
+    const { argv, calls } = scenario([{ kind: 'failed-receipt', text: '会话 sess_1 不存在' }, OVER])
+    await expect(waitRound(argv, { retryDelayMs: 0 })).rejects.toThrow('zcode.status 失败：会话 sess_1 不存在')
+    expect(calls()).toBe(1)
   })
 })

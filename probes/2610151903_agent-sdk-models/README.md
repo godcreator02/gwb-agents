@@ -7,7 +7,7 @@
 ## 来源
 
 原是单元 `D:\unitfolders\k8pa2-agent-sdk-models` 里的本机仓 `sdk-lab`（没有远端），2026-10-17 用不压缩的 `git subtree add` 并进本目录，
-原来的三个提交 ed4defd、a9218c9、d0de3ec 原样留在本仓历史里；原仓整份备份在那个单元目录下的 `sdk-lab.bundle`。
+原来的三个提交 ed4defd、a9218c9、d0de3ec 原样留在本仓历史里；那个单元连同原仓备份已于 2026-10-17 删除，历史只在本仓里。
 轨迹卡 `2026-10-15-claude-agent-sdk` 写的是原路径。并入时只改了两处：工作目录从单元根 `../work` 挪到系统临时目录，安装加 `--ignore-workspace`，
 别的文件与 `results/` 都是 2026-10-15 那次运行的原样。
 

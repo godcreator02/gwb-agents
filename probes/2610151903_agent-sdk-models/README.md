@@ -1,9 +1,18 @@
+`pnpm install --ignore-workspace; node --env-file-if-exists=api.txt run.mjs claude all; node summarize.mjs`（第三方模型先照 `api.txt.example` 写好 `api.txt`）
+
 # sdk-lab
 
 用 Claude Agent SDK 驱动不同模型做同一组 agent 任务，每个任务跑完自动检查，对比各模型能不能完成。
 
+## 来源
+
+原是单元 `D:\unitfolders\k8pa2-agent-sdk-models` 里的本机仓 `sdk-lab`（没有远端），2026-10-17 用不压缩的 `git subtree add` 并进本目录，
+原来的三个提交 ed4defd、a9218c9、d0de3ec 原样留在本仓历史里；原仓整份备份在那个单元目录下的 `sdk-lab.bundle`。
+轨迹卡 `2026-10-15-claude-agent-sdk` 写的是原路径。并入时只改了两处：工作目录从单元根 `../work` 挪到系统临时目录，安装加 `--ignore-workspace`，
+别的文件与 `results/` 都是 2026-10-15 那次运行的原样。
+
 ```bash
-pnpm install
+pnpm install --ignore-workspace
 node --env-file-if-exists=api.txt run.mjs claude all
 node --env-file=api.txt run.mjs deepseek all
 node --env-file=api.txt run.mjs glm bugfix subagents
@@ -20,17 +29,19 @@ node summarize.mjs
 | `recheck.mjs` | 改了检查逻辑后，对已经跑完的工作目录重新检查，不重新调用模型 |
 | `summarize.mjs` | 读 `results/` 打印对比表和没通过的检查项 |
 
-agent 的工作目录在仓外的单元根 `../work/<profile>/<task>/`，每次运行前清空重建。
+agent 的工作目录在系统临时目录 `%TEMP%\sdk-lab-work\<profile>\<task>\`，每次运行前清空重建。
 
 ## 隔离与限制
 
 * 子进程不加载本机的 Claude Code 设置（`settingSources: []`），去掉了 `CLAUDE_CODE_PLUGIN_DIRS`。
 * 自动放行 Read、Bash、Glob、Grep、Agent；Write、Edit 经 `canUseTool` 检查，只放行工作目录以内的路径，越界的拒绝并记进结果的 `deniedWrites`。Bash 不受这个限制，agent 用 Bash 写文件（Claude 修 bug 时就是用 python heredoc 改的）照样能写到任何地方。
-* 工作目录放在仓外：放在仓里时 agent 跑的 `git status` 看到的是 sdk-lab 仓本身。
+* 工作目录不放在任何 git 仓里：放在仓里时 agent 跑的 `git status` 看到的是那个仓本身。
 
 ## 第三方模型必须用单独的配置目录
 
-本机 Claude Code 已登录 Claude 账号时，子进程会优先用这份登录凭据，`ANTHROPIC_AUTH_TOKEN` 不起作用：DeepSeek 和 GLM 都回 401，DeepSeek 报出的 key 末四位跟 api.txt 里的对不上。所以第三方模型的 profile 设了 `CLAUDE_CONFIG_DIR=../work/.claude-config-<profile>`，这是一个空目录，子进程读不到本机登录。
+本机 Claude Code 已登录 Claude 账号时，子进程会优先用这份登录凭据，`ANTHROPIC_AUTH_TOKEN` 不起作用：DeepSeek 和 GLM 都回 401，DeepSeek 报出的 key 末四位跟 api.txt 里的对不上。所以第三方模型的 profile 设了 `CLAUDE_CONFIG_DIR=<工作目录>/.claude-config-<profile>`，这是一个空目录，子进程读不到本机登录。
+
+这一节的原因后来查明不对：401 来自 Claude Code 桌面版塞给子进程的会话变量，去掉以后不用单独的配置目录也行，见本仓 `probes/2610152150_third-party-auth/`。脚本保留当时的写法。
 
 ## 请求地址
 

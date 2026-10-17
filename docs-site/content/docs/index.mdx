@@ -1,20 +1,21 @@
 ---
 title: gwb-agents
-description: 在同一仓库开发 ZCode 与 Claude Code 两个独立 agent 插件
+description: 在同一仓库开发 ZCode 与 Claude Agent 两个 agent 插件；旧的 Claude Code 插件已被取代
 ---
 
-**本页回答**：两个 agent 插件怎么放在一起开发，哪些边界仍各自拥有；上层应用（QQ、协作站）怎么接上它们。
+**本页回答**：本仓的 agent 插件怎么放在一起开发，哪些边界仍各自拥有；上层应用（QQ、协作站）怎么接上它们。
 
-## 两个独立插件
+## 本仓的插件
 
 | 目录 | 发布包 | 接入方式 | 说明 |
 | --- | --- | --- | --- |
 | `plugins/zcode` | `@godcreator/gwb-zcode` | 服务 `gwbZcode`，经 ZCode 桌面端内部服务实现 | [ZCode 插件](/docs/zcode) |
-| `plugins/claudecode` | `@godcreator/gwb-claudecode` | 服务 `gwbClaudecode`，每轮一个 Claude Code 原生 CLI 进程 | [Claude Code 插件](/docs/claudecode) |
+| `plugins/claude-agent` | `@godcreator/gwb-claude-agent` | 服务 `gwbClaudeAgent`，每轮一次 Claude Agent SDK 的 `query()`，模型可换 | [Claude Agent 插件](/docs/claude-agent) |
+| `plugins/claudecode` | `@godcreator/gwb-claudecode` | 服务 `gwbClaudecode`，每轮一个 Claude Code 原生 CLI 进程 | 已被 gwb-claude-agent 取代，不再维护：[Claude Code 插件](/docs/claudecode) |
 
-两个插件共用仓库、pnpm workspace、锁文件和文档站。每个包保留自己的版本、依赖、命令与测试，可以单独安装、构建和发布。
+插件共用仓库、pnpm workspace、锁文件和文档站。每个包保留自己的版本、依赖、命令与测试，可以单独安装、构建和发布。
 
-每个插件只管把自己那个 agent 做好：本体是一个 cordis 服务，形状按那个执行端最自然的样子定，两个插件之间不对齐；同名命令是给进程外 agent 的薄封装。插件不管占用、不参与回报，和上层应用之间没有约定的错误措辞或凭证格式。
+每个插件只管把自己那个 agent 做好：本体是一个 cordis 服务，形状按那个执行端最自然的样子定，插件之间不对齐；同名命令是给进程外 agent 的薄封装。插件不管占用、不参与回报，和上层应用之间没有约定的错误措辞或凭证格式。
 
 {/* ref file="../pnpm-workspace.yaml" hash="8a44a5c0549a" blob="1d45833ee151" */}
 
@@ -22,11 +23,11 @@ description: 在同一仓库开发 ZCode 与 Claude Code 两个独立 agent 插�
 
 上层应用直接 inject 执行端插件的服务：qq-bot 可选 inject `gwbClaudeAgent`，把私聊里的任务交给它；协作站不接执行端，只经 qq-bot 发通知、注册任务组；`gwbZcode` 没有插件 inject，主会话经 MCP 调 `zcode.*` 命令。这里不增加公共业务队列、统一任务账本或派单插件。整体的接缝图与逐条讲解在 [agent 派单架构](/docs/agent-dispatch)。
 
-ZCode 的 `taskId` 与 Claude Code 的 `sessionId` 分别属于各自的原生会话；切换 agent 时由调用方创建新的会话，不跨软件复用上下文 ID。
+ZCode 的 `taskId` 与 claude-agent 的 `sessionId` 分别属于各自的原生会话；切换 agent 时由调用方创建新的会话，不跨软件复用上下文 ID。
 
 ## 开发与检查
 
-仓根运行 `pnpm install`、`pnpm build`、`pnpm check`；只处理一个包时用 `pnpm --filter @godcreator/gwb-zcode build` 或 `pnpm --filter @godcreator/gwb-claudecode check`。
+仓根运行 `pnpm install`、`pnpm build`、`pnpm check`；只处理一个包时用 `pnpm --filter @godcreator/gwb-zcode build` 或 `pnpm --filter @godcreator/gwb-claude-agent check`。
 文档站单独安装依赖，运行 `pnpm doc:render` 与 `pnpm doc`。实验材料留在仓根 `probes/`，不加入 workspace。
 
-隔离 home 安装时，`devkit.dev` 的 `dir` 指向本仓，`packages` 可以选 `["plugins/zcode","plugins/claudecode"]` 或其中一个。
+隔离 home 安装时，`devkit.dev` 的 `dir` 指向本仓，`packages` 可以选 `["plugins/zcode","plugins/claude-agent"]` 或其中一个。

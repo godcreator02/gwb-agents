@@ -2,7 +2,7 @@
   "name": "docs-site",
   "version": "0.0.37",
   "private": true,
-  "description": "gwb-agents 文档站：ZCode 与 Claude Code 插件及共同开发约定",
+  "description": "gwb-agents 文档站：ZCode 与 Claude Agent 插件及共同开发约定",
   "type": "module",
   "scripts": {
     "dev": "react-router dev --host 127.0.0.1 --strictPort",

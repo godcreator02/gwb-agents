@@ -1,9 +1,14 @@
 ---
 title: Claude Code 插件
-description: 服务 gwbClaudecode：本机原生 CLI 会话的创建、续聊与进程事件保存的状态；claudecode.* 命令是它给 agent 的薄封装
+description: 已被 gwb-claude-agent 取代、不再维护。服务 gwbClaudecode：本机原生 CLI 会话的创建、续聊与进程事件保存的状态；claudecode.* 命令是它给 agent 的薄封装
 ---
 
 **本页回答**：`plugins/claudecode` 负责什么、对外给什么、依赖谁，以及刻意不做的事。
+
+<Callout type="warn">
+**已被取代，不再维护**：本机 agent 会话改由 [Claude Agent 插件](/docs/claude-agent)（`@godcreator/gwb-claude-agent`）提供，取代的决定见轨迹卡[「换 Agent SDK」](/trajectory/2026-10-15-claude-agent-sdk)。
+qq-bot 已经不接本插件，没有别的插件 inject `gwbClaudecode`。代码还在 `plugins/claudecode/`，default home 里还装着 0.4.0，撤掉它记在[路线](/future/roadmap)里；本页留着讲这份还在的代码，不再给它加功能。
+</Callout>
 
 ## 功能
 

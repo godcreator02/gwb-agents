@@ -4,8 +4,8 @@
   "pages": [
     "index",
     "zcode",
-    "claudecode",
     "claude-agent",
+    "claudecode",
     "commands",
     "wiring",
     "agent-dispatch",

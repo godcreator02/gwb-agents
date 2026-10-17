@@ -8,5 +8,7 @@ description: 还有哪些事没做、各在等什么
 - **换成 ZCode 官方入口**：等 ZCode 提供给外部用的建会话入口（深链接里加会话路由，或 CLI 会话能出现在侧栏）。有了就换掉调试端口这条路，
   内部结构的依赖随之去掉
 - **多个工作区窗口**：现在开了两个以上 ZCode 窗口直接报错。等用户真碰到再做：按 `workspace` 找打开那个目录的窗口
+- **撤掉 gwb-claudecode**：已被 gwb-claude-agent 取代、没有插件再接它，但 `plugins/claudecode/` 还在仓里，default home 里还装着 0.4.0。
+  等用户定：从各 home 卸载、删掉 `plugins/claudecode/` 与它的文档页，包在源上标弃用
 - **QQ 私聊「记：」**：主人私聊里「记：」开头的消息直接写进当天日志、不开 agent（[agent 派单架构](/docs/agent-dispatch)的场景 S2）。还没做，在 qq-bot 仓的路线里跟进：
   gwb-bn-journal 已有服务方法 `gwbBnJournal.append`，可以由它经 `gwbQqBot.registerCommand` 注册一个直接命令

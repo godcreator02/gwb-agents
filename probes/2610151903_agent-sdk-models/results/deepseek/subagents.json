@@ -1,0 +1,86 @@
+{
+  "profile": "deepseek",
+  "model": "deepseek-flash",
+  "task": "subagents",
+  "finishedAt": "2026-10-15T11:32:07.409Z",
+  "durationSeconds": 14.967,
+  "resultSubtype": "success",
+  "numTurns": 5,
+  "mainToolCalls": [
+    "Agent",
+    "Agent",
+    "Agent",
+    "Write"
+  ],
+  "subagentToolCallCount": 11,
+  "deniedWrites": [],
+  "usage": {
+    "input_tokens": 22046,
+    "cache_creation_input_tokens": 0,
+    "cache_read_input_tokens": 44928,
+    "output_tokens": 1310,
+    "output_tokens_details": {
+      "thinking_tokens": 0
+    },
+    "server_tool_use": {
+      "web_search_requests": 0,
+      "web_fetch_requests": 0
+    },
+    "service_tier": "standard",
+    "cache_creation": {
+      "ephemeral_1h_input_tokens": 0,
+      "ephemeral_5m_input_tokens": 0
+    },
+    "inference_geo": "",
+    "iterations": [],
+    "speed": "standard",
+    "fallback_credit": null
+  },
+  "modelUsage": {
+    "deepseek-flash": {
+      "inputTokens": 44090,
+      "outputTokens": 3269,
+      "cacheReadInputTokens": 100096,
+      "cacheCreationInputTokens": 0,
+      "webSearchRequests": 0,
+      "costUSD": 0.352223,
+      "contextWindow": 200000,
+      "maxOutputTokens": 32000,
+      "thinkingTokens": 0,
+      "canonicalModel": "deepseek-flash",
+      "provider": "firstParty",
+      "costBasis": "unknown"
+    }
+  },
+  "finalText": "三个子代理并行统计完成，已写出 report.json：service-a（DEBUG 94/INFO 198/WARN 66/ERROR 42，topError \"db timeout\"）、service-b（81/221/56/42，\"token expired\"）、service-c（67/218/62/53，\"upstream 502\"）。",
+  "checks": [
+    {
+      "name": "派了三个 log-counter 子代理",
+      "passed": true
+    },
+    {
+      "name": "三个子代理在同一条回复里派出",
+      "passed": true
+    },
+    {
+      "name": "主代理没有自己读日志",
+      "passed": true
+    },
+    {
+      "name": "report.json 可解析",
+      "passed": true
+    },
+    {
+      "name": "service-a.log 统计正确",
+      "passed": true
+    },
+    {
+      "name": "service-b.log 统计正确",
+      "passed": true
+    },
+    {
+      "name": "service-c.log 统计正确",
+      "passed": true
+    }
+  ]
+}

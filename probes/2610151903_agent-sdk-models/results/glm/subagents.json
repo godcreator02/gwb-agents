@@ -1,0 +1,86 @@
+{
+  "profile": "glm",
+  "model": "glm-5.3",
+  "task": "subagents",
+  "finishedAt": "2026-10-15T11:35:38.000Z",
+  "durationSeconds": 62.002,
+  "resultSubtype": "success",
+  "numTurns": 2,
+  "mainToolCalls": [
+    "Agent",
+    "Agent",
+    "Agent",
+    "Write"
+  ],
+  "subagentToolCallCount": 7,
+  "deniedWrites": [],
+  "usage": {
+    "input_tokens": 991,
+    "cache_creation_input_tokens": 0,
+    "cache_read_input_tokens": 47488,
+    "output_tokens": 422,
+    "output_tokens_details": {
+      "thinking_tokens": 0
+    },
+    "server_tool_use": {
+      "web_search_requests": 0,
+      "web_fetch_requests": 0
+    },
+    "service_tier": "standard",
+    "cache_creation": {
+      "ephemeral_1h_input_tokens": 0,
+      "ephemeral_5m_input_tokens": 0
+    },
+    "inference_geo": "",
+    "iterations": [],
+    "speed": "standard",
+    "fallback_credit": null
+  },
+  "modelUsage": {
+    "glm-5.3": {
+      "inputTokens": 32210,
+      "outputTokens": 3563,
+      "cacheReadInputTokens": 172864,
+      "cacheCreationInputTokens": 0,
+      "webSearchRequests": 0,
+      "costUSD": 0.33655699999999994,
+      "contextWindow": 200000,
+      "maxOutputTokens": 32000,
+      "thinkingTokens": 0,
+      "canonicalModel": "glm-5.3",
+      "provider": "firstParty",
+      "costBasis": "unknown"
+    }
+  },
+  "finalText": "三个并行子代理已完成统计并汇总写入 report.json：service-a（ERROR 42，最多为 \"db timeout\"）、service-b（ERROR 42，最多为 \"token expired\"）、service-c（ERROR 53，最多为 \"upstream 502\"），各文件 400 行且级别计数加总吻合。",
+  "checks": [
+    {
+      "name": "派了三个 log-counter 子代理",
+      "passed": true
+    },
+    {
+      "name": "三个子代理在同一条回复里派出",
+      "passed": true
+    },
+    {
+      "name": "主代理没有自己读日志",
+      "passed": true
+    },
+    {
+      "name": "report.json 可解析",
+      "passed": true
+    },
+    {
+      "name": "service-a.log 统计正确",
+      "passed": true
+    },
+    {
+      "name": "service-b.log 统计正确",
+      "passed": true
+    },
+    {
+      "name": "service-c.log 统计正确",
+      "passed": true
+    }
+  ]
+}

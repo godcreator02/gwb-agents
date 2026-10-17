@@ -1,0 +1,91 @@
+{
+  "profile": "deepseek",
+  "model": "deepseek-flash",
+  "task": "smoke",
+  "finishedAt": "2026-10-15T11:36:34.582Z",
+  "durationSeconds": 7.384,
+  "resultSubtype": "success",
+  "numTurns": 4,
+  "mainToolCalls": [
+    "Read",
+    "Edit",
+    "Bash"
+  ],
+  "subagentToolCallCount": 0,
+  "deniedWrites": [],
+  "usage": {
+    "input_tokens": 21454,
+    "cache_creation_input_tokens": 0,
+    "cache_read_input_tokens": 62848,
+    "output_tokens": 334,
+    "output_tokens_details": {
+      "thinking_tokens": 0
+    },
+    "server_tool_use": {
+      "web_search_requests": 0,
+      "web_fetch_requests": 0
+    },
+    "service_tier": "standard",
+    "cache_creation": {
+      "ephemeral_1h_input_tokens": 0,
+      "ephemeral_5m_input_tokens": 0
+    },
+    "inference_geo": "",
+    "iterations": [],
+    "speed": "standard",
+    "fallback_credit": null
+  },
+  "modelUsage": {
+    "deepseek-flash": {
+      "inputTokens": 21454,
+      "outputTokens": 334,
+      "cacheReadInputTokens": 62848,
+      "cacheCreationInputTokens": 0,
+      "webSearchRequests": 0,
+      "costUSD": 0.147044,
+      "contextWindow": 200000,
+      "maxOutputTokens": 32000,
+      "thinkingTokens": 0,
+      "canonicalModel": "deepseek-flash",
+      "provider": "firstParty",
+      "costBasis": "unknown"
+    }
+  },
+  "finalText": "config.txt 的 port 原为 8080，已改为 9090（name 和 mode 两行保持不变），并用 node 读取确认输出为 port = 9090。",
+  "checks": [
+    {
+      "name": "config.txt 改对",
+      "passed": true
+    }
+  ],
+  "toolCalls": [
+    {
+      "name": "Read",
+      "input": {
+        "file_path": "D:\\unitfolders\\k8pa2-agent-sdk-models\\work\\deepseek\\smoke\\config.txt"
+      },
+      "parentToolUseId": null,
+      "messageId": "f5475613-af05-4f17-b5d7-844abc75f6f3"
+    },
+    {
+      "name": "Edit",
+      "input": {
+        "replace_all": false,
+        "file_path": "D:\\unitfolders\\k8pa2-agent-sdk-models\\work\\deepseek\\smoke\\config.txt",
+        "old_string": "port = 8080",
+        "new_string": "port = 9090"
+      },
+      "parentToolUseId": null,
+      "messageId": "1db8c965-a690-4855-84fa-f06d064c372b"
+    },
+    {
+      "name": "Bash",
+      "input": {
+        "command": "node -e \"console.log(require('fs').readFileSync('config.txt','utf8'))\"",
+        "description": "Print config.txt contents via node"
+      },
+      "parentToolUseId": null,
+      "messageId": "3f674110-337f-4399-8f39-6dec6bf56556"
+    }
+  ]
+}

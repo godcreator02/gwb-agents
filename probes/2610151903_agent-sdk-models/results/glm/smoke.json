@@ -1,0 +1,61 @@
+{
+  "profile": "glm",
+  "model": "glm-5.3",
+  "task": "smoke",
+  "finishedAt": "2026-10-15T11:31:19.732Z",
+  "durationSeconds": 25.471,
+  "resultSubtype": "success",
+  "numTurns": 4,
+  "mainToolCalls": [
+    "Read",
+    "Edit",
+    "Bash"
+  ],
+  "subagentToolCallCount": 0,
+  "deniedWrites": [],
+  "usage": {
+    "input_tokens": 19174,
+    "cache_creation_input_tokens": 0,
+    "cache_read_input_tokens": 64192,
+    "output_tokens": 309,
+    "output_tokens_details": {
+      "thinking_tokens": 0
+    },
+    "server_tool_use": {
+      "web_search_requests": 0,
+      "web_fetch_requests": 0
+    },
+    "service_tier": "standard",
+    "cache_creation": {
+      "ephemeral_1h_input_tokens": 0,
+      "ephemeral_5m_input_tokens": 0
+    },
+    "inference_geo": "",
+    "iterations": [],
+    "speed": "standard",
+    "fallback_credit": null
+  },
+  "modelUsage": {
+    "glm-5.3": {
+      "inputTokens": 19174,
+      "outputTokens": 309,
+      "cacheReadInputTokens": 64192,
+      "cacheCreationInputTokens": 0,
+      "webSearchRequests": 0,
+      "costUSD": 0.135691,
+      "contextWindow": 200000,
+      "maxOutputTokens": 32000,
+      "thinkingTokens": 0,
+      "canonicalModel": "glm-5.3",
+      "provider": "firstParty",
+      "costBasis": "unknown"
+    }
+  },
+  "finalText": "三步已完成：config.txt 原端口为 8080，现已改为 9090，且 Node 读取确认文件内容为 `name = demo / port = 9090 / mode = dev`，其余行未变。",
+  "checks": [
+    {
+      "name": "config.txt 改对",
+      "passed": true
+    }
+  ]
+}

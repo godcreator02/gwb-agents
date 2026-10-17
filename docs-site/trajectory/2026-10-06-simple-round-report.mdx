@@ -1,0 +1,34 @@
+---
+born-at: 2026-10-06T23:12
+type: choice
+parent: [2026-10-02-gwb-zcode]
+label: 回报简化
+domain: agent 派单
+---
+
+## 背景
+
+QQ 任务做完怎么把结果交回 qq-bot。现状是票据直报：发起方签 64 位十六进制票据、账本只存哈希、回报正文不许含票据、claudecode 插件把输出里所有 64 位十六进制替换掉、回报分 completed / failed / needs_input 三种状态、MCP 服务名由两个插件各配一份。agent 漏报时这一轮永远占着聊天，要等插件重载后变成「派单未确认」再人工 resolve。
+
+设计时提了另一条路：qq-bot 自己调执行端的 status 等这一轮结束，不依赖 agent 回报。用户的回答：
+
+```text
+我觉得还是agent自己报，qq等着结束感觉有点蠢。但是直报可以设计的更简洁一些我觉得
+```
+
+## 结论与边界
+
+保留 agent 直报，去掉为不存在的威胁设的部分：
+
+- 本轮编号只用来对上是哪一轮，明文存、不存哈希、不检查正文里有没有它。本机只有一个用户，能调 MCP 的 agent 本来就能调任何命令，保密挡不住谁
+- 只交一段话 `qq-bot.report {round, text}`，不分状态：没做成、要人补信息，写在话里就够了
+- 提示词写 home 名，不写 MCP 服务名：每个 gwb MCP 服务的说明里都写着它连的是哪个 home，agent 照着选，两份 `report-mcp-server` 设置一起删
+- 漏报靠懒检查：只有人发 /状态、或这一轮没回报时又来了新消息，qq-bot 才问一次执行端的 status；做完了就按「执行端已结束、没有回报」收尾，附上最后的回答。没有后台轮询，也没有人工解除的命令
+
+否掉的方向：qq-bot 等执行端结束（用户否掉）；保留票据保密与三种状态（挡不住任何人，只增加 agent 出错的机会）。
+
+pivots-from:: [按场景重建](2026-10-06-rebuild-from-real-scenarios.md)
+
+## 依据
+
+无实验。现状机制读自 gwb-qq-bot 仓 `plugins/qq-bot/src/direct-report.ts`、`book.ts`，gwb-agents 仓 `plugins/claudecode/src/runtime.ts`（0.3.2 / 0.3.1）。

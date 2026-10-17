@@ -1,0 +1,25 @@
+---
+born-at: 2026-10-07T00:25
+type: choice
+parent: [2026-10-02-gwb-zcode]
+label: 单向依赖
+domain: agent 派单
+---
+
+## 背景
+
+派单改走 cordis 服务后，qq-bot 要 inject `gwbCollab`（绑群时核对项目登记过），协作站要 inject `gwbQqBot`（巡检通知），两个插件的 peer 互相写着对方。`devkit.release` 的发版前检查顺着 peer 走回本包就拒发，两个插件在不同的仓，没有同工作区的放行。
+
+## 结论与边界
+
+用户选了「协作站→qq-bot，绑群不查项目」：qq-bot 是发到手机的通道，协作站 inject `gwbQqBot` 发通知；qq-bot 不认识协作站。群绑定的参数里直接给协作仓路径、项目名与「协作仓」标记，由绑的人（通常是 agent）先查 `collab.projects` 再填；qq-bot 照标记在提示词里写「改动经 collab.submit 提交」。
+
+代价：qq-bot 不再自己核对路径是不是登记过的协作项目。
+
+否掉的方向：qq-bot→协作站、协作站提供「登记通知出口」的方法（这个登记口只有 qq-bot 一个实现）；把「改动经 collab.submit」写进每个协作仓的 AGENTS.md（各入口的 agent 都读得到，但要动协作站的项目模板与现有项目仓，这一轮不做）。
+
+pivots-from:: [派单走服务](2026-10-07-dispatch-via-services.md)
+
+## 依据
+
+无实验。peer 成环的拒发规则见 `devkit.release` 命令的 usage（发版前检查「peer 不成环」一条）。

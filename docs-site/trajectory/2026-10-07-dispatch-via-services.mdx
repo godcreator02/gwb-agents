@@ -1,0 +1,25 @@
+---
+born-at: 2026-10-07T00:06
+type: choice
+parent: [2026-10-02-gwb-zcode]
+label: 派单走服务
+domain: agent 派单
+---
+
+## 背景
+
+重建方案里，qq-bot 与协作站仍照 gwb-lifecycle-plugins 的现行规矩（「数据读写和动作用命令」）经命令总线按名字调 `zcode.*`、`claudecode.*`、`collab.projects`、`qq-bot.notify`、`bn-journal.*`。用户问接口怎么连时说「我预期是cordis服务连接」；看到现行规矩里依赖方要 inject 一个空对象当「装了」的标记，问「咋会提供空的实现呢」，随后定下「应该命令才是薄封装」。
+
+## 结论与边界
+
+派单这一组插件之间一律走 cordis 服务：gwb-zcode 提供 `gwbZcode`、gwb-claudecode 提供 `gwbClaudecode`、gwb-collab 提供 `gwbCollab`、gwb-qq-bot 提供 `gwbQqBot`、gwb-bn-journal 提供 `gwbBnJournal`，依赖方都用 `ctx.inject` 可选注入：装了才有那项功能，卸了自动撤掉，出错直接抛异常、有类型。同名命令保留，改成服务方法的薄封装，只给进程外的调用方：agent 的 `qq-bot.report`、`collab.submit` 与主会话批量派活的 `zcode.*`。
+
+全生态的规矩翻转（改 `rules/services.mdx` 与 `interaction.mdx`、block-note 与 paper-library 等的迁移）在另一个会话里做，正本在 gwb-lifecycle-plugins；本站方案只按新规矩写派单这一组。
+
+否掉的方向：照现行规矩按名字调命令（字符串约定、各调用方重复校验回执、提供方没装要到调用时才报错）；存在标记服务（inject 一个从不调用的空对象换取重载联动）。
+
+pivots-from:: [适配在应用](2026-10-06-adapters-stay-in-apps.md)
+
+## 依据
+
+无实验。按名互调的现状统计（不含测试与迁移脚本）：block-note 周边插件 28 处、paper-library 27 处、协作站 9 处、qq-bot 6 处；成熟做法参照 Koishi（插件之间用服务、命令给用户）与 VS Code（扩展之间用 activate 导出的 API）。

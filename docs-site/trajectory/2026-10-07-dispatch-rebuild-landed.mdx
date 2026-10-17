@@ -1,0 +1,28 @@
+---
+born-at: 2026-10-07T13:30
+type: evidence
+parent: [2026-10-02-gwb-zcode]
+label: 重建落地
+domain: agent 派单
+---
+
+## 背景
+
+重建方案的代码改造在三个仓做完：gwb-agents（gwb-zcode、gwb-claudecode）、gwb-qq-bot、gwb-collab。发版前要证明两个执行端服务能被注入、一轮能从 QQ 派出再回报回来，再把方案页换成现状页。
+
+## 结论与边界
+
+2026-10-07 发版并升级 default：gwb-zcode 0.4.0、gwb-claudecode 0.4.0、gwb-qq-bot 0.4.0、gwb-collab 0.23.0。现状写进 `docs/agent-dispatch/` 三页与接缝图，方案页删除。
+
+没做、留在路线图的：主人私聊「记：」（等 `gwbBnJournal.append` 发版）、bot 互派。
+
+没验到的：协作站网页「交给 AI」两种去处、巡检通知、主会话在同一工作区并行派 2 条 ZCode，这一轮都没有在真机上走一遍；qqbotb 那个 home 已升级，但它的群还没重绑，它的 agent 连的 MCP 地址还是旧端口。
+
+pivots-from:: [按真实场景重建](2026-10-06-rebuild-from-real-scenarios.md)
+
+## 依据
+
+- 发版前的隔离 home（`dispatch-rebuild-2610070030`）：qq-bot 装上后 `qq-bot.status` 的 `executors` 是 zcode、claudecode；`zcode.create` → `zcode.status` 与 `claudecode.create` → `claudecode.status` 各跑一轮测试任务，都回「收到 0.4」；参数形状错误、相对路径、已删的 `claudecode.resolve` 都按预期报错
+- default 升级后四个插件都是 ACTIVE，qq-bot 网关 open、两个执行端都注入上，协作站推送 connected
+- QQ 真机（01:06–01:10）：主人私聊三轮续在同一会话，排队的那条在上一条回报后自动开始，/状态 正常；群重新 `qq-bot.bind` 到混合型 MMC 协作仓（collab 标记）后 @ 一个只读任务，ZCode 在协作仓里新建会话，约 1 分 45 秒后回报并在群里送达；两个聊天都没有未送达的结果
+- 真机前发现并修掉的两处：被动回复次数原来跟着触发消息的副本走，重投时 `msg_seq` 会重复，改成存进账本 `replies` 在串行区里取号；懒检查收尾后 `advance` 还回「排在第 0 个」，改成收尾后回空

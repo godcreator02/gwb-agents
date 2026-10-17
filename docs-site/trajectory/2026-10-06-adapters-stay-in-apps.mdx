@@ -1,0 +1,29 @@
+---
+born-at: 2026-10-06T23:50
+type: choice
+parent: [2026-10-02-gwb-zcode]
+label: 适配在应用
+domain: agent 派单
+---
+
+## 背景
+
+重建方案的第一版让 gwb-zcode 与 gwb-claudecode 的 create / send / status 改成同一个形状（字段统一改名 `session`，status 都回 `over` 与 `reply`），qq-bot 按执行端名拼出命令名直接调，删掉它的执行端适配层。这一条是设计时自己定的，没有问过用户。用户看到后问「原来不是说在qqbot和collab分别做一个agent适配层吗？没了吗现在」，听完理由后说：
+
+```text
+不对，我就是故意不要求几个agent同形，我觉得这做不到。应该让agent插件专注于做agent本体，然后应用那边提供个适配层接一下才对
+```
+
+## 结论与边界
+
+执行端插件只管把自己那个 agent 做好，命令按那个执行端最自然的样子给，不为了跟别的执行端对齐而改形状：ZCode 是常驻桌面端，有窗口、侧栏、归档，回答里混着工具调用记录；Claude Code 一轮一个进程，只有一段最终回答。接上它们是应用自己的事：qq-bot 的 `executors/` 定「开一轮、问一次做完没有」两件事，每个执行端一份实现；协作站的 `ai-handling.ts` 定「交给一个人看得见的 agent」，实现是 ZCode 会话与 Claude 终端窗口两份。全机没有几个执行端共同遵守的形状；某个执行端插件改了命令，只动接它的那几份实现。
+
+本卡推翻了[按场景重建](2026-10-06-rebuild-from-real-scenarios.md)里「三条命令同形、不再有适配层」一条，那张卡的其余结论不变。
+
+pivots-from:: [按场景重建](2026-10-06-rebuild-from-real-scenarios.md)
+
+否掉的方向：执行端插件对外统一形状、上层不写适配（压成一个形状要么丢掉各执行端自己的能力，要么造出谁都不完全合身的公共形状；用户判断做不到）。
+
+## 依据
+
+无实验。两个执行端插件现有的命令形状读自 gwb-agents 仓 `plugins/zcode/src/index.ts` 与 `plugins/claudecode/src/index.ts`（0.3.1）。

@@ -1,0 +1,117 @@
+---
+title: agent 派单架构
+description: qq-bot、协作站、主会话与 claude-agent / zcode 两个执行端插件之间的接缝总图与逐条讲解
+---
+
+import { DispatchMap } from './index/dispatch-map';
+
+**本页回答**：任务从 QQ 私聊、协作站或主会话出发，交到本机 agent 手里、结果再回到发起方，中间经过哪些模块、每条接缝上传什么、谁负责。一步步的链路在[使用案例](/docs/agent-dispatch/cases)，定了什么、否掉了什么在[决策记录](/docs/agent-dispatch/decisions)。
+
+## 只为这六个真实场景设计
+
+| 场景 | 谁在哪 | 要的是什么 |
+| --- | --- | --- |
+| S1 手机遥控 | 主人不在电脑前，QQ 私聊机器人 | 直接发一句话，进默认组，claude-agent 在默认工作区（主人私聊没绑定时是设置 `default-workspace`）干活，这一轮的最后一条回复发回手机。单聊被动窗口 60 分钟，过了窗口改发主动消息 |
+| S2 随手记 | 主人私聊 | 「记：…」原话进当天日志，马上回「已记」。还没做，见[路线](/future/roadmap) |
+| S3 协作项目 | 主人私聊，发「/mmc 任务」这类组命令 | 组由协作站按项目注册；agent 在项目文件夹里干活，协作仓的改动照说明书 collab 经 `collab.submit` 提交；这个组有自己的会话与队列，不挡默认组的事 |
+| S4 项目通知 | 协作站在本机刷新各项目的状态 | 新 MR、冲突、提交失败这类通知新出现、连续存在满 60 秒就私聊主人，同一条不重发 |
+| S5 交给 AI | 人在协作窗格或网站提示栏 | 点「复制给 AI」，拿到这个项目全部通知写成的提示词，自己贴给想用的 AI。插件不启动任何 AI，所以图上没有这条接缝 |
+| S6 主会话派活 | Claude Code 主会话经 MCP | 成批的活派给 ZCode 省额度，同一目录最多 5 个并行，回执的 `waitCommand` 交给 Monitor 在后台等，自己复查，用户说了才归档 |
+
+<DispatchMap />
+
+## 插件之间怎么连
+
+**服务是本体、命令是薄封装**：插件之间的调用一律经 cordis 服务——提供方继承 `Service`、导出类型，依赖方 inject，出错直接抛异常，提供方装卸、重载时依赖方跟着走。命令只给进程外的调用方（经 MCP 来的 agent、网页），处理函数校验参数后调同一个服务方法。插件之间不按名字互调命令。
+
+| 服务 | 提供方 | 方法 | 谁 inject |
+| --- | --- | --- | --- |
+| `gwbClaudeAgent` | gwb-claude-agent | `create` / `send` / `waitRound` / `status` | qq-bot |
+| `gwbQqBot` | gwb-qq-bot | `notify(id, text)`、`registerTaskGroup`、`commandNameProblem`（另有 `registerCommand`，协作站不用） | 协作站 |
+| `gwbZcode` | gwb-zcode | `open` / `create` / `send` / `status` / `archive` | 没有插件 inject；主会话经 MCP 调同名的 `zcode.*` 命令 |
+
+两处都是可选注入（`ctx.inject`）：提供方没装，依赖方照常加载，只是少了那部分功能；提供方卸载、重载时自动撤掉、再接上。qq-bot 接 claude-agent 就是这几行，claude-agent 重新装上时在做的轮次接着等它结束：
+
+{/* ref file="../../gwb-qq-bot/plugins/qq-bot/src/index.ts" lines="98-106" hash="5a96b3d4c903" blob="20c8b227e0e7" */}
+
+协作站接 qq-bot：qq-bot 出现时按现状注册任务组，消失时撤掉全部注册：
+
+{/* ref file="../../../oz47p-docsite-kit/god-docsite/plugins/collab/src/index.ts" lines="222-231" hash="afd5442a58ea" blob="3ff0ea6b6bfe" */}
+
+仍然是命令的只有进程外调用方要用的：agent 提交协作仓 `collab.submit`（接缝 7）、主会话批量派活用的 `zcode.*`（接缝 8）。
+
+依赖只朝一个方向：协作站 → qq-bot → claude-agent。qq-bot 里没有和协作站有关的代码，claude-agent 不认识 qq-bot。
+
+## 执行端插件只做 agent 本体
+
+执行端插件按自己那个 agent 最自然的样子给方法，不为了跟另一个执行端对齐而改形状。ZCode 是常驻的桌面端，会话进侧栏、能切窗口、能归档，一轮的回答里混着工具调用记录；claude-agent 没有界面，每一轮调一次 SDK 的 `query()`，结果是这一轮的最后一条回复。
+
+| 执行端插件 | 一轮怎么开始 | 怎么知道做完、拿回答 |
+| --- | --- | --- |
+| gwb-zcode | `create({workspace, prompt})` → `taskId`；续轮 `send({workspace, task, prompt})` | `status({workspace, task, waitSeconds?, replyTailChars?})` → `roundIsOver`、`replies`（最后一条是收尾的话） |
+| gwb-claude-agent | `create({workspace, prompt})` → `{sessionId, round}`；续轮 `send({workspace, sessionId, prompt, interrupt?})` | `waitRound({workspace, sessionId, round})` 等到结束交回 `{status, text, model}`；`status` 是 `running` 时带进度 |
+
+参数与回执的全部字段在 [ZCode 插件](/docs/zcode)与 [Claude Agent 插件](/docs/claude-agent)两页。
+
+qq-bot 直接调 `gwbClaudeAgent`，没有自己的执行端适配层：它只接这一个执行端，用哪个模型是 claude-agent 自己的设置 `default-model`，qq-bot 不选。以后要再接别的执行端，要重新加回「这一组交给谁」。执行端插件也**不管占用**：同一个工作区开几条会话由调用方决定（S6 就是同一目录 5 条并行），会不会改到同一个文件归派单的人管——qq-bot 管住同一个私聊的同一个任务组一次一轮（两个组指向同一个目录也照样同时做），主会话管住自己拆出的任务互不重叠。
+
+## qq-bot 里的任务组与一轮
+
+qq-bot 只处理私聊。私聊里直接发的文字进**默认组**，「/组命令 正文」进那个**任务组**；一个任务组是一个工作区，有三种来源：
+
+| 来源 | 怎么来 |
+| --- | --- |
+| 默认组 | 每个私聊一个，由 `qq-bot.bind` 设；主人私聊没绑时按设置 `default-workspace` |
+| 命令登记的组 | agent 调 `qq-bot.group.add`，存在聊天表里 |
+| 插件注册的组 | 别的插件调 `gwbQqBot.registerTaskGroup`（协作站按项目注册的就是这种），插件卸载或重载时撤掉 |
+
+每个私聊的每个组各有会话、在做的一轮与队列：同一组一次一轮，后来的消息排在这一组自己的队列；不同的组可以同时做。分发规则、会话怎么选、聊天表的形状写在 qq-bot 仓自己的文档站（`gwb-qq-bot/docs-site` 的「派任务」「一条消息分到哪」「聊天表」三页），这里只讲跨插件的那几步。
+
+一轮从头到尾：
+
+1. 白名单里的人发来一条私聊，分到一个组、进这一组的队列。这一组空闲就开一轮（新会话 `create`，接着用上一个会话 `send`），回「【组名】已接收，开始做。」，第二行写这个私聊此刻在做几件、排队几条；这一组在忙就回「排在第 N 个」
+2. 派出调用失败：原话带组名回给私聊，这一轮作废，不留「不确定」的中间状态
+3. 等这一轮结束：调 `waitRound`，结束后把最后一条回复原样发回，开头写「【组名 · 第 N 轮 · 模型】」、引用派出这一轮的那条消息；没做完发「这一轮没有做完：原因」。这一组队列里有就接着开下一轮：
+
+{/* ref file="../../gwb-qq-bot/plugins/qq-bot/src/dispatch/chat-rounds.ts" lines="316-335" hash="fd18f882764a" blob="6a2e3cf91455" */}
+
+4. 发不出去的结果记进这个私聊的没送达，人发 `/状态` 时补发；没有要补发的，`/状态` 逐组报在做什么，在做的那组附上 claude-agent 交回的最近一段回答末尾
+5. 重载：qq-bot 重载后凭聊天表记下的会话号与轮次接着等；claude-agent 重载时它那边在跑的一轮记 failed，等到的就是失败的原因；重载前还没派出去的那一轮作废并告诉人：
+
+{/* ref file="../../gwb-qq-bot/plugins/qq-bot/src/dispatch/chat-rounds.ts" lines="341-351" hash="44d7b776b434" blob="6a2e3cf91455" */}
+
+私聊里的保留命令只有三个，第一段完全相同才算：`/帮助`（按此刻注册的组与直接命令现算）、`/状态`、`/新会话 [组名]`。其余命令都是任务组或直接命令（插件注册、当场回一句、不派给 agent）。
+
+## 逐条接缝
+
+**1 · QQ 入站**：只处理私聊。单聊事件和群事件在同一个订阅位 `GROUP_AND_C2C_EVENT` 里，群事件到了只记事件类型。私聊先过白名单，名单外的静默拒绝并记下 openid，通过的才交给派任务：
+
+{/* ref file="../../gwb-qq-bot/plugins/qq-bot/src/rounds.ts" lines="53-57" hash="80acb3401eab" blob="b6110e59a544" */}
+
+**2 · QQ 出站**：回执、结果、通知都从这里发。被动回复的窗口与次数是平台的硬限制（单聊 60 分钟、每条触发消息 4 次），这里只做选择：窗口内且次数没用完走被动回复，过了窗口或次数用完走主动消息；被动发不出去改发一次主动消息，主动也发不出去，结果留在聊天表里等人发 `/状态` 补发。每条回复都引用它回答的那条消息（`message_reference`），几个组的结果交叉出现时分得清。
+
+**3 · 派一轮**：开一轮、等它结束、发回最后一条回复都在这一条上。新会话 `create`，接着用上一个会话 `send`，拿回的会话号与轮次记进聊天表，`waitRound` 要用：
+
+{/* ref file="../../gwb-qq-bot/plugins/qq-bot/src/dispatch/chat-rounds.ts" lines="255-262" hash="369fab234ce1" blob="6a2e3cf91455" */}
+
+提示词尾部附三段：任务来源（QQ 私聊、发言人、任务组与工作区）、任务组的要求（组或绑定写了 `instructions` 才有，原样附上）、最后一条回复的要求。协作项目的组把「先读说明书 collab」写在组的要求里，qq-bot 自己不认识协作站：
+
+{/* ref file="../../gwb-qq-bot/plugins/qq-bot/src/dispatch/chat-rounds.ts" lines="300-314" hash="ae8f9bbf0333" blob="6a2e3cf91455" */}
+
+**4 · SDK 子进程**：claude-agent 每一轮调一次 SDK 的 `query()`，SDK 附带的那份 Claude Code 由插件启动，权限 `bypassPermissions`，照常加载本机的设置、CLAUDE.md、MCP 与 hooks。打断时按进程树结束，插件卸载时在跑的一轮也这样结束、记 failed。细节在 [Claude Agent 插件](/docs/claude-agent)。
+
+**5 · QQ 私聊通知**：协作站一个项目的状态变了（做完过一次完整刷新之后），把这个项目此刻的全部通知交给 QQ 私聊这份实现；通知和网站提示栏是同一份。它按每个项目记下的已发 id 只挑新出现的，新出现的要连续存在满 60 秒才发（先提交、一两秒后才推送时中间那条「还没推送」就不发了），自己保存出来的改动不发，设置 `qq-notifications` 关着就什么都不做。到点时这一批里期间没消失过的合成一条：
+
+{/* ref file="../../../oz47p-docsite-kit/god-docsite/plugins/collab/src/notifications/qq-private-chat.ts" lines="146-158" hash="16e8f5f6511c" blob="fcc474a74e72" */}
+
+id 由项目、这批通知与此刻算出（`collab-<哈希>`）。qq-bot 按 id 去重、发不出去不重发，通知在协作站网站的提示栏里不会丢。
+
+**6 · 注册任务组**：协作站项目列表里的项目起了「QQ 命令」（`collab.project.qq-command`），就经 `registerTaskGroup` 注册一个任务组；设命令时先经 `commandNameProblem` 查命令名，跟注册用的是同一条规则。组的工作区是项目文件夹（协作仓的上一级），能看到同一个项目里的协作仓、资料库与代码仓；组的要求只写项目名、协作仓路径与先读说明书 collab，提交规矩以说明书为准：
+
+{/* ref file="../../../oz47p-docsite-kit/god-docsite/plugins/collab/src/project/qq-task-groups.ts" lines="29-38" hash="669ad24a1341" blob="0f91c5665e07" */}
+
+**7 · agent 改协作仓**：协作项目任务组里的 agent，协作仓的改动照说明书 collab 经 `collab.submit` 提交审核，不手写 git。这是 agent 自己的工具调用：派单方在组的要求里只指向说明书 collab，不抄提交规矩。
+
+**8 · 主会话派活**：主会话照说明书 zcode 直接调 `zcode.create / send / status / archive`。发出即返回，`status` 最多等 240 秒；要等到底的把回执里的 `waitCommand` 交给 Monitor 在后台运行，这一轮结束时收到一行结果。
+
+**9 · 调试端口**：ZCode 没有给外部用的建会话入口，gwb-zcode 经工作区窗口页面的远程调试端口 9339，在页面里直接调 ZCode 客户端自己的服务，会话才进侧栏；ZCode 要带 `--remote-debugging-port=9339` 启动。连法与约定通道见 [ZCode 插件](/docs/zcode)与[插件之间怎么连](/docs/wiring)。

@@ -1,0 +1,25 @@
+---
+born-at: 2026-10-17T11:00
+type: choice
+parent: [2026-10-02-gwb-zcode]
+label: 图集并入
+domain: agent 派单
+---
+
+## 背景
+
+接缝图集原是单独的文档单元 uxje5-gwb-seams，只放跨仓的接缝图，第一篇是 agent 派单架构。10-17 整理单元时查到，用到它的只有本仓：派单的执行端插件都在这里，qq-bot 与协作站都只经本仓的服务接 agent。用户选定把图集并进 gwb-agents，不再单独保留。
+
+并入前核对代码，图集写的是 10-08 的架构，此后变了：qq-bot 0.8 起只接 claude-agent，回报命令与懒检查都删了，改成等这一轮结束、发回最后一条回复；协作站不再启动 AI，只交回提示词，也已经按项目注册 QQ 任务组；gwb-claudecode 被 gwb-claude-agent 取代。用户对并入方式的原话：「第一组照清单做；第二组四件事都按推荐：按今天代码重写、根卡改普通卡、路线图只并「记：」、术语表只并还成立的」。
+
+## 结论与边界
+
+图集的三页并进本站 `/docs/agent-dispatch`，按今天的代码重写，接缝图从 11 条减到 9 条：去掉 gwb-claudecode 的子进程与协作站交给 AI 的两条，回报一轮并进派一轮，加上 claude-agent 的 SDK 子进程与协作站注册任务组。图集的 12 张轨迹卡原文并进本站，它的根卡改成普通卡，全部挂到本站根卡下；路线只并了还没做的「记：」一项，术语表只并了还成立的词。
+
+边界：页面钉着 gwb-qq-bot 与 god-docsite 两个仓的代码，那边改了这里亮黄灯但不算红，看到就回来复核。
+
+pivots-from:: [接缝图集](2026-10-06-gwb-seams-root.md)
+
+## 依据
+
+原单元整份备份在 `D:\unitfolders\uxje5-gwb-seams\uxje5-gwb-seams.bundle`（最后一个提交 b37c3a2）。今天架构的出处：gwb-qq-bot 仓轨迹卡「执行统一交给 claude-agent」「去掉回报命令，发回最后一条回复」，god-docsite 仓提交 7955830e。

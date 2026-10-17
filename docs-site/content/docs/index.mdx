@@ -20,7 +20,7 @@ description: 在同一仓库开发 ZCode 与 Claude Code 两个独立 agent 插�
 
 ## 应用接缝
 
-上层应用各自写执行端适配层：qq-bot 的 `executors/` inject `gwbZcode` 与 `gwbClaudecode`，协作站的 `ai-handling.ts` inject `gwbZcode`；接口由应用自己按需要定、互不统一。这里不增加公共业务队列、统一任务账本或派单插件。整体的接缝图在接缝图集 uxje5-gwb-seams 的派单架构篇。
+上层应用直接 inject 执行端插件的服务：qq-bot 可选 inject `gwbClaudeAgent`，把私聊里的任务交给它；协作站不接执行端，只经 qq-bot 发通知、注册任务组；`gwbZcode` 没有插件 inject，主会话经 MCP 调 `zcode.*` 命令。这里不增加公共业务队列、统一任务账本或派单插件。整体的接缝图与逐条讲解在 [agent 派单架构](/docs/agent-dispatch)。
 
 ZCode 的 `taskId` 与 Claude Code 的 `sessionId` 分别属于各自的原生会话；切换 agent 时由调用方创建新的会话，不跨软件复用上下文 ID。
 

@@ -8,6 +8,7 @@
     "claude-agent",
     "commands",
     "wiring",
+    "agent-dispatch",
     "glossary",
     "outputs"
   ]

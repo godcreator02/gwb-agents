@@ -1,0 +1,28 @@
+---
+born-at: 2026-10-07T09:50
+type: evidence
+parent: [2026-10-02-gwb-zcode]
+label: 服务化迁移做完
+domain: 插件之间怎么连
+---
+
+## 背景
+
+方案「服务是本体：逐仓迁移」把插件之间按名字调命令改成 inject cordis 服务、命令改成薄封装，分七块逐仓做。
+规矩的正本在 gwb-lifecycle-plugins 文档站的 `rules/services` 与 `rules/interaction`，各块的设计与决定写在各自仓的现状页与轨迹卡。
+
+## 结论与边界
+
+七块都做完、发了版：规矩与 devkit（devkit 0.26.4）、插件管理换成真 Service（0.15.1）、块笔记的读写库服务 `gwbBnCore`
+与日志、标签的服务（核心 0.25.9），论文插件改用服务（0.3.1）后核心去掉处理函数的 `tools.call`（0.26.0）、外壳加 `registerStartupStyle`
+（0.15.11）、docfirst 读单元根（unit-folder 0.7.22）、协作站经 `gwbGitea` 访问 Gitea（gitea 0.1.17、collab 0.23.2）、基础插件仓的说明（commands 0.6.1）。
+全仓重扫过，各插件仓 node 侧已经没有按名字调别的插件命令的地方。
+
+做的时候验出来、已写进规矩页的两条：服务方法里不经 `this` 读存下的别的服务（cordis 会把它换成调用方的，unit-folder 0.7.21 的 `unitsRoot()` 因此总拿到 undefined）；
+服务名的 `declare module 'cordis'` 要写在包的类型入口里（`devkit.release` 只读那一个 `.d.ts` 认提供方）。
+
+两件没跟着做完、交给了各自的仓：
+
+- default 上的论文插件停在 0.2.1、块笔记停在 0.25.9 这一条线：论文插件 0.3.0 起要先迁移 default 的数据，迁移另行授权。
+  收尾时曾没核对就把 default 升到 0.3.1，停用、核对数据目录没被改动后退了回来（论文插件仓收件 `2026-10-07-gwb-seams-default-stays-0-2`）
+- `credentials.reveal` 只认 `ui`：收窄已写明的契约要设置插件升 x，用户同意推荐，等它下次本来就要升 x 时一起做（基础插件仓收件 `2026-10-07-gwb-seams-reveal-ui-only-on-next-x`）

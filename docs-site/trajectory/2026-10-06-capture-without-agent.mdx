@@ -1,0 +1,25 @@
+---
+born-at: 2026-10-06T23:16
+type: choice
+parent: [2026-10-02-gwb-zcode]
+label: 随手记直写
+domain: agent 派单
+---
+
+## 背景
+
+私聊里说「记一下：…」要进当天日志，用来替代 flomo。现状是当成普通任务派给 agent：提示词里附库 id 与写日志的步骤，agent 经 MCP 调 bn-journal 写入后再回报。一条随手记要开一轮 agent、等十几秒，还占住这个聊天的那一轮。
+
+## 结论与边界
+
+用户选了「qq-bot 直接写日志」：主人私聊里以「记：」开头的消息不开 agent，qq-bot 把原话经新增的 `bn-journal.append {lib, text}` 追加进设置 `journal-library` 那个库的当天日志，马上回「已记」。别的聊天里发「记：」回一句只在主人私聊里可用。前缀只认「记：」一种，不加别名。
+
+随之删掉的：绑定上的 `journalLibrary` 字段、绑定时经 `block-note.lib.list` 校验库的那段、提示词里的写日志说明。库在不在、开没开放给日志插件，由 bn-journal 自己拒绝，原话回给聊天。
+
+否掉的方向：交给 agent 理解自然语言再写（慢、占一轮、多一处 agent 可能写错的地方）。
+
+pivots-from:: [按场景重建](2026-10-06-rebuild-from-real-scenarios.md)
+
+## 依据
+
+无实验。现状读自 gwb-qq-bot 仓 `plugins/qq-bot/src/book.ts` 的派单提示词与 `bridge.ts` 的绑定校验（0.3.2）。

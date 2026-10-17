@@ -1,0 +1,29 @@
+---
+born-at: 2026-10-08T14:55
+type: choice
+parent: [2026-10-02-gwb-zcode]
+label: 协作站注册任务组
+domain: agent 派单
+---
+
+## 背景
+
+「单向依赖」那张卡定的是协作站 → qq-bot，qq-bot 绑群时不查协作站：绑的人把协作仓路径、项目名与「协作仓」标记填进 `qq-bot.bind`，qq-bot 照标记在提示词里写「改动经 collab.submit 提交」。之后 qq-bot 0.6.0 只处理私聊，「一个协作项目一个群」不再存在；0.7.0 起私聊按斜杠命令分任务组，`bind` 删掉了 `collab` 参数。协作项目怎么接进 QQ 要重新定。
+
+## 结论与边界
+
+依赖方向维持协作站 → qq-bot；变的是协作项目怎么接进 QQ：一个协作项目是一个任务组，由协作站经 `gwbQqBot.registerTaskGroup` 按项目注册，命令是人自己起的短名（如 `/mmc`），工作区是项目文件夹（协作仓的上一级），组的要求只写项目名、协作仓路径和「先读说明书 collab」，提交规矩以说明书为准。qq-bot 里不再有和协作站有关的代码，只剩读旧版聊天表时把 `collab` 标记换成一段组的要求。这是在 gwb-qq-bot 仓定下并实现的（那边的卡 `2026-10-08-collab-registers-project-groups`），本站的接缝图与三页跟着改。
+
+边界：qq-bot 这边已实现并发版 0.7.0；协作站那边截至写卡还没实现（Gitea 上 godcreator/collab-site 的 issue #2），协作项目的组现在要用 `qq-bot.group.add` 登记，协作站注册的做法没有运行过。
+
+supersedes:: [单向依赖](2026-10-07-collab-depends-on-qqbot.md)
+
+## 否掉的候选
+
+- **qq-bot 保留绑定上的「协作仓」标记**：qq-bot 要认识协作站的提交规矩，两边的规矩会对不上，依赖也会往双向走
+- **工作区是协作仓根**：agent 只看得到协作仓，看不到同一个项目里的资料库与代码仓
+- **命令用 `/<项目名>`**：项目名可能超过命令名的长度上限（8 个汉字或 16 个英文字符），自动截短又可能撞名
+
+## 依据
+
+无实验。qq-bot 侧的设计变动见 gwb-qq-bot 仓提交 6b1b6ed、7cdb3fd，实现 6591280，升版 d061798；协作站对 qq-bot 的 peer 已是 `^0.7.0`（collab-site 仓 `plugins/collab/package.json`），代码里还只调 `notify`。

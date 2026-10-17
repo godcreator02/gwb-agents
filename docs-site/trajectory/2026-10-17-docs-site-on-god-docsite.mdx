@@ -1,0 +1,41 @@
+---
+born-at: 2026-10-17T11:00
+type: choice
+parent: [2026-10-02-gwb-zcode]
+label: 文档站迁到 god-docsite
+domain: 文档站
+---
+
+## 背景
+
+docs-site 原来是 Next 16 + `@godcreator/docfirst-workflow` 0.5.3：页面路由、搜索、llms 文本、星轨盘都是站里手写的 Next 文件（`src/app/`），
+组件名册由 `src/components/registry.ts` 与 `scripts/verify-roster.mjs` 两边核对，看页面要先 `pnpm build` 再 `pnpm start`（端口 4335）。
+平台换成了 `@godcreator/god-docsite`（fumadocs + React Router + Vite）加功能包 code-pin、trajectory、explainer，命令行换成 `@godcreator/docfirst` 0.1.0，
+开发服务由工作台的 `docsite.site.*` 托管。这次照 god-docsite 维护页「Next docfirst 站迁到平台」迁过来，gwb-vscode 是先例。
+
+## 结论与边界
+
+- 骨架用 `docfirst.create` 在空目录 `D:\gwb-docfirst-migrate\gwb-agents\docs-site` 生成，`app/` 与根配置（`vite.config.ts`、`react-router.config.ts`、`source.config.ts`、
+  `tsconfig.json`、`.gitignore`、`pnpm-workspace.yaml`、锁文件、`docsite.json`、`people.json`、`glossary.json`、`comments/`）整份换进 docs-site；
+  `package.json` 依赖与脚本照骨架，名字、版本、描述保留
+- 首页 `app/routes/home.tsx` 的介绍句改成这个仓的一句话；`content/meta.json` 写站名，`docs`、`future` 两区加 `title` 与 `"root": true`
+- 轨迹卡从 `content/trajectory/` 挪到站点根 `trajectory/`，原来的 `meta.json` 删掉，卡的地址与正文里的卡链接不变
+- 接缝图 `ZcodeSeams` 只给 gwb-zcode 页用，从 `src/components/` 挪到 `content/docs/zcode/`（`docs/zcode.mdx` 的同名文件夹），那一页开头 import 它；
+  数据文件仍是 `.mjs`（`docfirst.config.mjs` 在 Node 里直接读），旁边补一份 `.d.mts` 给类型检查
+- `docfirst.config.mjs` 改成新写法：`fumadocsRoster: true`、`trajectory: 'trajectory'`、名册加 `Term`，接缝图的机读规则与三份 SKILL.md 的映射照旧
+- 删掉 Next 的 `src/app/`、`src/lib/`、`src/proxy.ts`、组件表与名册核对（`mdx.tsx`、`registry.ts`、`verify-roster.mjs`）、next / postcss 配置与 create-fumadocs 留下的 README
+- 迁完 `pnpm doc` 全绿，`pnpm typecheck`、`pnpm build` 通过，`docsite.site.start` 后首页、`/docs`、`/future/roadmap`、`/docs/zcode`（接缝图画出来了）、星轨盘与卡页、`/llms.txt` 都是 200
+
+边界：生成物只有两处变化。AGENTS 正本里「先 `pnpm build` 再 `pnpm start`（端口 4335）」改成由工作台托管开发服务，理由指向的目录从 `content/trajectory/` 改成 `trajectory/`；
+`plugins/zcode/skills/zcode/SKILL.md` 只是新渲染器把一处连续两个空行合成一个，内容不变，不为它发插件新版。
+README 与两份 claude-agent 的 SKILL.md 渲染结果跟旧的一字不差。
+
+## 否掉的候选
+
+在 Next 站上逐个文件改成 React Router：路由、页面 loader、功能包接线全都不同，从骨架换进来再核对差异更可靠，gwb-vscode 也是这么迁的。
+
+## 代价与遗留
+
+- `/future` 没有首页、直接打开是 404，侧栏顶上的下拉框点「未来」去的是 `/future/roadmap`；旧站同样没有未来区首页
+- `glossary.mdx` 仍是一张手写表格页，术语没有转进 `glossary.json`，正文里也就没有术语标注；要不要转、转了表格页留不留，以后再定
+- 接缝图的颜色是写死的，深色主题下仍是浅底，没有改成主题色

@@ -11,7 +11,7 @@ ZCode 插件 `@godcreator/gwb-zcode`（`plugins/zcode/`）：经 ZCode 工作区
 - **权限一律完全访问（`yolo`）**：每次发指令前以代理的 `settings.mode.current` 为准切换并读回核对，不加模式参数
 - **不一直等到 ZCode 做完**：派任务的命令发出即返回，`zcode.status` 的等待不超过 240 秒（Claude Code 等一次 MCP 调用 300 秒就放弃）；要等到底的交给回执里的 `waitCommand`，由 Claude Code 的 Monitor 在后台运行
 - **只做切工作区、派任务、查结果、归档**：不加取消任务、列会话、取消归档之类的命令，除非用户要；还在跑的会话不归档；`zcode.create` 不替调用方切工作区
-- **不用 ZCode CLI 无界面、不往 ZCode 的自动化表写行**：用户要侧栏看得见、不要绕路（理由见 `docs-site/content/trajectory/`）
+- **不用 ZCode CLI 无界面、不往 ZCode 的自动化表写行**：用户要侧栏看得见、不借定时自动化间接派任务（理由见 `docs-site/trajectory/`）
 - **ZCode 的内部结构集中在 `src/desktop.ts` 与 `src/round.ts`**：React 树路径、服务方法名、模式值、启动参数。ZCode 升级后先核对文档站「插件之间怎么连」那张约定通道表
 - **服务名、方法与命令的参数、回执形状都是契约**：服务给 qq-bot 与协作站，命令给 agent；改了同时改说明书正本 `content/docs/outputs/skills/zcode.mdx`，按 gwb-release 判断升哪一位
 - **服务是本体、命令是薄封装**：命令只查参数形状（认不出的键直接报错）再调同名服务方法；取值的含义在服务方法里查，不另写一份实现
@@ -36,6 +36,6 @@ ZCode 插件 `@godcreator/gwb-zcode`（`plugins/zcode/`）：经 ZCode 工作区
 
 ## 文档
 
-文档站在 `docs-site/`：`pnpm doc` 检查；看页面先 `pnpm build` 再 `pnpm start`（http://127.0.0.1:4335），不用 `pnpm dev`。
+文档站在 `docs-site/`（god-docsite + docfirst）：`pnpm doc` 检查；看页面由工作台托管开发服务：`docsite.site.add {"dir":"<站目录>"}`，地址以 `docsite.site.list` 回的 `url` 为准，不在会话里自己 `pnpm dev`。
 仓根 README / AGENTS / CLAUDE 与随包说明书 `plugins/zcode/skills/zcode/SKILL.md` 都是生成物，正本在 `docs-site/content/docs/outputs/`。
 改了被钉的代码，同一个提交里在站目录 `pnpm doc:confirm` 写回、逐条复核剩下的黄灯。

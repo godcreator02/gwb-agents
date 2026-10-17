@@ -3,6 +3,8 @@ title: gwb-zcode
 description: 让别的插件（服务 gwbZcode）与 agent（zcode.* 命令）给运行中的 ZCode 桌面端派任务：把窗口切到要用的工作区，新建会话或在已有会话里接着发指令，一律完全访问，发出即返回、按需查询结果，会话出现在 ZCode 侧栏里。本页按接缝讲插件怎么连到 ZCode 的任务服务
 ---
 
+import { ZcodeSeams } from './zcode/zcode-seams'
+
 **本页回答**：这个插件做什么、它和 agent、ZCode 桌面端之间的每条接缝传什么、由谁负责、怎么测，以及它刻意不做什么。
 
 ZCode 是本机装的另一个 AI 编程客户端（Electron 桌面端，模型走用户的 GLM 套餐）。把批量的任务交给它，能省下派任务一方自己的模型额度。
